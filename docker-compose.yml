@@ -8,6 +8,7 @@ services:
     restart: always
     command:
       - "--providers.docker=true"
+      - "--providers.docker.network=internal_net"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
@@ -50,6 +51,7 @@ services:
       REDIS_HOST: redis
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=internal_net"
       - "traefik.http.routers.api.rule=Host(`dev.maharasa.id`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=myresolver"

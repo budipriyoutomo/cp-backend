@@ -43,6 +43,35 @@ class AuthController extends Controller
         ]);
     }
 
+    public function loginByPin(Request $request)
+    {
+        $request->validate([
+            'pin' => 'required|string|min:6|max:10',
+        ]);
+
+        $user = User::where('pin', $request->pin) 
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'PIN tidak valid'
+            ], 401);
+        }
+
+        $token = JWTAuth::fromUser($user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Login successful',
+            'data' => [
+                'user' => new UserResource($user),
+                'token' => $token,
+                'expires_in' => JWTAuth::factory()->getTTL() * 60,
+            ]
+        ]);
+    }
+
     public function me()
     {
         $user = auth()->user();

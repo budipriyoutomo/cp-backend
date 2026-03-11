@@ -34,7 +34,16 @@ class RouteServiceProvider extends ServiceProvider
                 ->group(base_path('routes/api.php'));
 
             Route::middleware('web')
-                ->group(base_path('routes/web.php'));
+                ->group(base_path('routes/web.php')); 
+        });
+
+
+        Route::macro('crud', function ($uri, $controller, $name) {
+            Route::get("$uri",        [$controller, "{$name}Index"]);
+            Route::post("$uri",       [$controller, "{$name}Store"]);
+            Route::get("$uri/{id}",   [$controller, "{$name}Show"]);
+            Route::put("$uri/{id}",   [$controller, "{$name}Update"]);
+            Route::delete("$uri/{id}",[$controller, "{$name}Destroy"]);
         });
     }
 }

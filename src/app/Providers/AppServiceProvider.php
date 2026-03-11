@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 
+use Illuminate\Database\Schema\Blueprint;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -20,5 +22,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         //
+        Blueprint::macro('fullstamps', function () {
+            $this->char('created_by', 36)->nullable();
+            $this->char('updated_by', 36)->nullable();
+            $this->char('deleted_by', 36)->nullable();
+        });
     }
 }

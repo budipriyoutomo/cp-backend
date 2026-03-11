@@ -1,0 +1,135 @@
+<?php
+
+namespace App\Http\Controllers;
+ 
+use App\Http\Requests\Master\PlateColorRequest;
+use App\Http\Resources\Master\PlateColorResource;
+use App\Http\Requests\Master\MenuRequest;
+use App\Http\Resources\Master\MenuResource;
+use App\Http\Requests\Master\OutletRequest;
+use App\Http\Resources\Master\OutletResource;
+
+use App\Services\MasterService;
+
+class MasterController extends BaseApiController
+{
+    public function __construct(
+        private MasterService $service
+    ) {}
+  
+    // ======================================================
+    // PLATE COLOR METHODS
+    // ======================================================
+
+    public function platecolorindex()
+    {
+        return $this->resource(
+            PlateColorResource::collection($this->service->plateColor->all())
+        );
+    }
+
+    public function platecolorstore(PlateColorRequest $request)
+    {
+        return $this->resource(
+            new PlateColorResource(
+                $this->service->plateColor->create($request->validated())
+            ),
+            'Plate color created',
+            201
+        );
+    }
+
+    public function platecolorupdate(PlateColorRequest $request, $id)
+    {
+        return $this->resource(
+            new PlateColorResource(
+                $this->service->plateColor->update($id, $request->validated())
+            ),
+            'Plate color updated'
+        );
+    }
+
+    public function platecolordestroy($id)
+    {
+        $this->service->plateColor->delete($id);
+        return $this->success(null, 'Plate color deleted');
+    }
+
+    
+    // ======================================================
+    // MENU METHODS
+    // ======================================================
+
+    public function menuindex()
+    {
+        return $this->resource(
+            MenuResource::collection($this->service->menu->all())
+        );
+    }
+
+    public function menustore(MenuRequest $request)
+    {
+        return $this->resource(
+            new MenuResource(
+                $this->service->menu->create($request->validated())
+            ),
+            'Menu created',
+            201
+        );
+    }
+
+    public function menuupdate(MenuRequest $request, $id)
+    {
+        return $this->resource(
+            new MenuResource(
+                $this->service->menu->update($id, $request->validated())
+            ),
+            'Menu updated'
+        );
+    }
+
+    public function menudestroy($id)
+    {
+        $this->service->menu->delete($id);
+        return $this->success(null, 'Menu deleted');
+    }
+
+    
+    // ======================================================
+    // OUTLET METHODS
+    // ======================================================
+
+    public function outletindex()
+    {
+        return $this->resource(
+            OutletResource::collection($this->service->outlet->all())
+        );
+    }
+
+    public function outletstore(OutletRequest $request)
+    {
+        return $this->resource(
+            new OutletResource(
+                $this->service->outlet->create($request->validated())
+            ),
+            'Outlet created',
+            201
+        );
+    }
+
+    public function outletupdate(OutletRequest $request, $id)
+    {
+        return $this->resource(
+            new OutletResource(
+                $this->service->outlet->update($id, $request->validated())
+            ),
+            'Outlet updated'
+        );
+    }
+
+    public function outletdestroy($id)
+    {
+        $this->service->outlet->delete($id);
+        return $this->success(null, 'Outlet deleted');
+    }
+}

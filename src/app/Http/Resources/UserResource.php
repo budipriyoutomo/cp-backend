@@ -18,6 +18,7 @@ class UserResource extends JsonResource
             'id'         => $this->id,
             'name'       => $this->name,
             'email'      => $this->email,
+            'pin'        => $this->pin,
             'role'       => $this->role,
             'departemen' => $this->departemen,
             'outlet'     => is_array($this->outlet) ? $this->outlet : json_decode($this->outlet, true),

@@ -21,7 +21,7 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $table = 'users';
     protected $fillable = [
-        'name', 'email', 'password', 'role', 'departemen', 'outlet', 'module_app'
+        'name', 'email', 'password', 'role', 'departemen', 'outlet', 'module_app','pin'
     ];
 
 
@@ -59,6 +59,7 @@ class User extends Authenticatable implements JWTSubject
             'departemen' => $this->departemen,
             'outlet' => $this->outlet,
             'module_app' => $this->module_app,
+            'pin' => $this->pin,
         ];
     }
 

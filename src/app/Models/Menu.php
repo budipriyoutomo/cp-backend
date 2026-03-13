@@ -1,7 +1,9 @@
 <?php
 
 namespace App\Models;
- 
+
+use Illuminate\Support\Facades\Storage;
+
 class Menu extends BaseModel
 {
     protected $table = 'menus'; 
@@ -20,9 +22,20 @@ class Menu extends BaseModel
         'price' => 'decimal:2',
         'is_active' => 'boolean',
     ];
+
+    protected $hidden = ['image'];
+    protected $appends = ['image_url'];
     
     public function platecolor()
     {
         return $this->belongsTo(PlateColors::class, 'plate_color_id');
     }
+
+    public function getImageUrlAttribute()
+    {
+        return $this->image
+            ? Storage::disk('s3')->url($this->image)
+            : null;
+    }
+
 }

@@ -69,9 +69,15 @@ class MasterController extends BaseApiController
 
     public function menustore(MenuRequest $request)
     {
+        $data = $request->validated();
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image');
+        }
+        
         return $this->resource(
             new MenuResource(
-                $this->service->menu->create($request->validated())
+                $this->service->menu->create($data)
             ),
             'Menu created',
             201

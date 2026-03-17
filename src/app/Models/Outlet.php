@@ -1,14 +1,10 @@
 <?php
 
 namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-
-class Outlet extends Model
+ 
+class Outlet extends BaseModel
 {
-    use HasFactory;
-
+  
     protected $table = 'outlets';
 
     protected $fillable = [
@@ -20,5 +16,9 @@ class Outlet extends Model
         'is_active',
     ];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+ 
     
 }

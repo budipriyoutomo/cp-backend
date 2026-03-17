@@ -32,7 +32,7 @@ Route::post('/login-pin', [AuthController::class, 'loginByPin']);
 Route::middleware(['auth:api', 'role:admin,purchase'])
     ->prefix('master')
     ->group(function () {
-
+ 
         Route::crud('platecolor', MasterController::class, 'platecolor'); 
         Route::crud('menu', MasterController::class, 'menu');
         Route::crud('outlet', MasterController::class, 'outlet');

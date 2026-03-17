@@ -14,7 +14,7 @@ class MenuRequest extends BaseRequest
         return [
             'menuname'        => 'required|string|max:150|unique:menus,menuname',
             'description'     => 'nullable|string|max:255',
-            'image'           => 'nullable|string|max:255',
+            'image'           => 'nullable|image|mimes:jpg,jpeg,png,webp',
 
             'price'           => 'required|numeric|min:0',
             'shelf_life'      => 'nullable|integer|min:0',
@@ -33,7 +33,7 @@ class MenuRequest extends BaseRequest
         return [
             'menuname'        => 'required|string|max:150|unique:menus,menuname,' . $this->route('id'),
             'description'     => 'nullable|string|max:255',
-            'image'           => 'nullable|string|max:255',
+            'image'           => 'nullable|image|mimes:jpg,jpeg,png,webp',
 
             'price'           => 'required|numeric|min:0',
             'shelf_life'      => 'nullable|integer|min:0',

@@ -26,7 +26,7 @@ class Menu extends BaseModel
     protected $hidden = ['image'];
     protected $appends = ['image_url'];
     
-    public function platecolor()
+    public function plateColor()
     {
         return $this->belongsTo(PlateColors::class, 'plate_color_id');
     }

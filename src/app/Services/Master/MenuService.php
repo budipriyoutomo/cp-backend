@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Model;
 class MenuService extends BaseService
 {
     protected string $model = Menu::class;
+    protected array $relations = ['plateColor'];
+    protected array $searchable = ['menuname', 'description'];
+    protected array $sortable = ['menuname', 'price', 'created_at'];
+    
 
     public function create(array $data): Model
     {
@@ -19,10 +23,11 @@ class MenuService extends BaseService
 
             $filename = Str::uuid() . '.' . $data['image']->getClientOriginalExtension();
 
-            Storage::disk('s3')->put(
+            Storage::disk('s3')->putFileAs(
                 'menus',
                 $data['image'],
-                $filename
+                $filename,
+                'public'
             );
 
             $data['image'] = 'menus/' . $filename;
@@ -48,10 +53,11 @@ class MenuService extends BaseService
 
             $filename = Str::uuid() . '.' . $data['image']->getClientOriginalExtension();
 
-            Storage::disk('s3')->put(
+            Storage::disk('s3')->putFileAs(
                 'menus',
                 $data['image'],
-                $filename
+                $filename,
+                'public'
             );
 
             $data['image'] = 'menus/' . $filename;

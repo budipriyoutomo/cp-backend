@@ -10,6 +10,7 @@ use App\Http\Requests\Master\OutletRequest;
 use App\Http\Resources\Master\OutletResource;
 
 use App\Services\MasterService;
+use Symfony\Component\HttpFoundation\Request;
 
 class MasterController extends BaseApiController
 {
@@ -21,10 +22,10 @@ class MasterController extends BaseApiController
     // PLATE COLOR METHODS
     // ======================================================
 
-    public function platecolorindex()
+    public function platecolorindex(Request $request)
     {
         return $this->resource(
-            PlateColorResource::collection($this->service->plateColor->all())
+            PlateColorResource::collection($this->service->plateColor->list($request))
         );
     }
 
@@ -60,10 +61,10 @@ class MasterController extends BaseApiController
     // MENU METHODS
     // ======================================================
 
-    public function menuindex()
+    public function menuindex(Request $request)
     {
         return $this->resource(
-            MenuResource::collection($this->service->menu->all())
+            MenuResource::collection($this->service->menu->list($request))
         );
     }
 
@@ -105,10 +106,10 @@ class MasterController extends BaseApiController
     // OUTLET METHODS
     // ======================================================
 
-    public function outletindex()
+    public function outletindex(Request $request)
     {
         return $this->resource(
-            OutletResource::collection($this->service->outlet->all())
+            OutletResource::collection($this->service->outlet->list($request))
         );
     }
 

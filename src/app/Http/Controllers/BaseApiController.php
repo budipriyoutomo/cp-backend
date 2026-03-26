@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\LengthAwarePaginator; 
+use Illuminate\Http\Resources\Json\ResourceCollection; 
 
 class BaseApiController extends Controller
 {
@@ -41,8 +42,46 @@ class BaseApiController extends Controller
     /**
      * Response untuk single resource atau collection
      */
-    protected function resource(JsonResource $resource, string $message = 'Success', int $code = 200)
+    protected function resource($resource, string $message = 'Success', int $code = 200)
     {
+        // 🔥 Resource Collection (INI YANG DIPAKAI SEKARANG)
+        if ($resource instanceof ResourceCollection) {
+
+            $paginator = $resource->resource;
+
+            // ✅ kalau paginate
+            if ($paginator instanceof LengthAwarePaginator) {
+                return response()->json([
+                    'status' => true,
+                    'message' => $message,
+                    'data' => $resource->collection,
+                    'meta' => [
+                        'current_page' => $paginator->currentPage(),
+                        'per_page'     => $paginator->perPage(),
+                        'total'        => $paginator->total(),
+                        'last_page'    => $paginator->lastPage(),
+                    ]
+                ], $code);
+            }
+
+            // ❌ kalau bukan paginate
+            return response()->json([
+                'status' => true,
+                'message' => $message,
+                'data' => $resource->collection,
+            ], $code);
+        }
+
+        // 🔥 Single Resource
+        if ($resource instanceof JsonResource) {
+            return response()->json([
+                'status' => true,
+                'message' => $message,
+                'data' => $resource,
+            ], $code);
+        }
+
+        // 🔥 fallback
         return $this->success($resource, $message, $code);
     }
 

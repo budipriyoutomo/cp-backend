@@ -59,22 +59,22 @@ class ProductionItem extends BaseModel
 
     public function scopeFresh($query)
     {
-        return $query->where('status', 'fresh');
+        return $query->where('belt_status', 'fresh');
     }
 
     public function scopeWarning($query)
     {
-        return $query->where('status', 'warning');
+        return $query->where('belt_status', 'warning');
     }
 
     public function scopeExpired($query)
     {
-        return $query->where('status', 'expired');
+        return $query->where('belt_status', 'expired');
     }
 
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['fresh', 'warning']);
+        return $query->whereIn('belt_status', ['fresh', 'warning']);
     }
 
     /*
@@ -99,11 +99,11 @@ class ProductionItem extends BaseModel
         $minutes = now()->diffInMinutes($this->produced_at);
 
         if ($minutes >= 60) {
-            $this->status = 'expired';
+            $this->belt_status = 'expired';
         } elseif ($minutes >= 45) {
-            $this->status = 'warning';
+            $this->belt_status = 'warning';
         } else {
-            $this->status = 'fresh';
+            $this->belt_status = 'fresh';
         }
 
         return $this;

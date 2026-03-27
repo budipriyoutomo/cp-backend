@@ -16,4 +16,9 @@ class ProductionPlanItem extends BaseModel
     {
         return $this->belongsTo(ProductionPlan::class, 'production_plan_id');
     }
+
+    public function plateColor()
+    {
+        return $this->belongsTo(PlateColors::class, 'plate_color');
+    }
 }

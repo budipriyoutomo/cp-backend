@@ -55,11 +55,11 @@ namespace App\Http\Controllers;
         */
         public function savePlan(ProductionPlanRequest $request)
         {
-            $this->service->plan->create([
-                'date' => $request->date,
-                'outlet_id' => $request->outletId,
-                'items' => $this->transformPlanItems($request->plan)
-            ]);
+           $this->service->plan->upsertPlan(
+                $request->outletId,
+                $request->date,
+                $request->plan
+            );
 
             return $this->success(null, 'Plan saved');
         }
@@ -210,20 +210,18 @@ namespace App\Http\Controllers;
         | HELPER
         |--------------------------------------------------------------------------
         */
-        private function transformPlanItems(array $rows): array
+       private function transformPlanItems(array $row): array
         {
             $items = [];
 
-            foreach ($rows as $row) {
-                foreach ($row as $key => $value) {
+            foreach ($row as $key => $value) {
 
-                    if ($key === 'timeSlot') continue;
+                if ($key === 'timeSlot') continue;
 
-                    $items[] = [
-                        'plate_color' => $key,
-                        'qty' => $value,
-                    ];
-                }
+                $items[] = [
+                    'plate_color' => $key,
+                    'qty'         => $value,
+                ];
             }
 
             return $items;

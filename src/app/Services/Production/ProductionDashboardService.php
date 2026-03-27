@@ -2,8 +2,10 @@
 
 namespace App\Services\Production;
 
+use App\Models\PlateColors;
 use App\Models\ProductionItem;
 use App\Models\ProductionPlanItem;
+use App\Models\ProductionPlan;
 
 class ProductionDashboardService
 {
@@ -11,36 +13,46 @@ class ProductionDashboardService
     {
         $today = today();
 
-        $plateColors = ProductionItem::select('plate_color')
-            ->distinct()
-            ->pluck('plate_color');
+        // 🔥 ambil semua warna dari plan + production
+        $plateColors = PlateColors::where('is_active', true)
+            ->get(['platename', 'id']);
 
-        return $plateColors->map(function ($color) use ($outletId, $today) {
+        $targets = ProductionPlanItem::whereHas('plan', function ($q) use ($outletId, $today) {
+                $q->where('outlet_id', $outletId)
+                ->whereBetween('date', [
+                    $today->startOfDay(),
+                    $today->endOfDay()
+                ]);
+            })
+            ->selectRaw('plate_color, SUM(qty) as total')
+            ->groupBy('plate_color')
+            ->pluck('total', 'plate_color'); 
+
+        // 🔥 produced today
+        $produced = ProductionItem::where('outlet_id', $outletId)
+            ->whereDate('produced_at', $today)
+            ->selectRaw('plate_color, COUNT(*) as total')
+            ->groupBy('plate_color')
+            ->pluck('total', 'plate_color');
+
+        $expiring = ProductionItem::where('outlet_id', $outletId)
+            ->where('belt_status', 'expired')
+            ->whereNull('final_status')
+            ->selectRaw('plate_color, COUNT(*) as total')
+            ->groupBy('plate_color')
+            ->pluck('total', 'plate_color');
+
+        return $plateColors->map(function ($color) use ($targets, $produced, $expiring, $outletId) {
 
             return [
-                'plateColor' => $color,
-
-                'targetToday' => ProductionPlanItem::whereHas('plan', function ($q) use ($outletId, $today) {
-                        $q->where('outlet_id', $outletId)
-                          ->whereDate('date', $today);
-                    })
-                    ->where('plate_color', $color)
-                    ->sum('qty'),
-
-                'produced' => ProductionItem::where('outlet_id', $outletId)
-                    ->where('plate_color', $color)
-                    ->whereDate('produced_at', $today)
-                    ->count(),
-
-                'sold' => 0,
-
-                'expiringSoon' => ProductionItem::where('outlet_id', $outletId)
-                    ->where('plate_color', $color)
-                    ->where('status', 'warning')
-                    ->count(),
-
-                'outletId' => $outletId
+                'plateColor'    => $color->platename,
+                'targetToday'   => $targets[$color->id] ?? 0,
+                'produced'      => $produced[$color->id] ?? 0,
+                'sold'          => 0, // nanti kita isi
+                'waste'         => 0, // nanti kita isi
+                'expiringSoon'  => $expiring[$color->id] ?? 0,
+                'outletId'      => $outletId,
             ];
-        });
+        })->values();
     }
 }

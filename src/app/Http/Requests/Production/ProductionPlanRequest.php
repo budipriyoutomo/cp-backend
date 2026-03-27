@@ -9,14 +9,12 @@ class ProductionPlanRequest extends BaseRequest
     protected function rulesForCreate(): array
     {
         return [
-            'date'      => ['required', 'date'],
-            'outletId'  => ['required', 'uuid'],
-            'plan'      => ['required', 'array'],
-
+            'plan' => ['required', 'array'],
             'plan.*.timeSlot' => ['required', 'string'],
+            'plan.*.items' => ['required', 'array'],
 
-            // dynamic plate color
-            'plan.*' => ['array'],
+            'plan.*.items.*.plateColorId' => ['required', 'uuid'],
+            'plan.*.items.*.qty' => ['required', 'integer', 'min:0'],
         ];
     }
 }

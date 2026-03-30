@@ -4,8 +4,7 @@ namespace App\Services\Production;
 
 use App\Models\PlateColors;
 use App\Models\ProductionItem;
-use App\Models\ProductionPlanItem;
-use App\Models\ProductionPlan;
+use App\Models\ProductionPlanItem; 
 
 class ProductionDashboardService
 {
@@ -38,18 +37,33 @@ class ProductionDashboardService
         $expiring = ProductionItem::where('outlet_id', $outletId)
             ->where('belt_status', 'expired')
             ->whereNull('final_status')
+            ->whereDate('expires_at', $today)
             ->selectRaw('plate_color, COUNT(*) as total')
             ->groupBy('plate_color')
             ->pluck('total', 'plate_color');
 
-        return $plateColors->map(function ($color) use ($targets, $produced, $expiring, $outletId) {
+        $sold = ProductionItem::where('outlet_id', $outletId)
+            ->where('final_status', 'sold')
+            ->whereDate('sold_at', $today)
+            ->selectRaw('plate_color, COUNT(*) as total')
+            ->groupBy('plate_color')
+            ->pluck('total', 'plate_color');
+            
+        $waste = ProductionItem::where('outlet_id', $outletId)
+            ->where('final_status', 'waste')
+            ->whereDate('expires_at', $today)
+            ->selectRaw('plate_color, COUNT(*) as total')
+            ->groupBy('plate_color')
+            ->pluck('total', 'plate_color');
+
+        return $plateColors->map(function ($color) use ($targets, $produced, $sold, $waste, $expiring, $outletId) {
 
             return [
                 'plateColor'    => $color->platename,
                 'targetToday'   => $targets[$color->id] ?? 0,
                 'produced'      => $produced[$color->id] ?? 0,
-                'sold'          => 0, // nanti kita isi
-                'waste'         => 0, // nanti kita isi
+                'sold'          => $sold[$color->id] ?? 0 ,
+                'waste'         => $waste[$color->id] ?? 0,
                 'expiringSoon'  => $expiring[$color->id] ?? 0,
                 'outletId'      => $outletId,
             ];

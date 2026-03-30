@@ -95,6 +95,7 @@ class ProductionItemService extends BaseService
             ->where('outlet_id', $outletId)
             ->whereNull('final_status')
             ->where('belt_status', 'expired')
+            ->whereDate('expires_at', now()->toDateString())
             ->orderBy('expires_at')
             ->get();
     }

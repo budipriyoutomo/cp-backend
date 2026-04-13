@@ -8,6 +8,9 @@ use App\Http\Requests\Master\MenuRequest;
 use App\Http\Resources\Master\MenuResource;
 use App\Http\Requests\Master\OutletRequest;
 use App\Http\Resources\Master\OutletResource;
+use App\Http\Requests\Master\WasteReasonRequest;
+use App\Http\Resources\Master\WasteReasonResource;
+
 
 use App\Services\MasterService;
 use Symfony\Component\HttpFoundation\Request;
@@ -139,4 +142,43 @@ class MasterController extends BaseApiController
         $this->service->outlet->delete($id);
         return $this->success(null, 'Outlet deleted');
     }
+
+    // ======================================================
+    // WASTE REASON METHODS
+    // ======================================================
+
+    public function wastereasonindex(Request $request)
+    {
+        return $this->resource(
+            WasteReasonResource::collection($this->service->wasteReason->list($request))
+        );
+    }
+
+    public function wastereasonstore(WasteReasonRequest $request)
+    {
+        return $this->resource(
+            new WasteReasonResource(
+                $this->service->wasteReason->create($request->validated())
+            ),
+            'Waste reason created',
+            201
+        );
+    }
+
+    public function wastereasonupdate(WasteReasonRequest $request, $id)
+    {
+        return $this->resource(
+            new WasteReasonResource(
+                $this->service->wasteReason->update($id, $request->validated())
+            ),
+            'Waste reason updated'
+        );
+    }
+
+    public function wastereasondestroy($id)
+    {
+        $this->service->wasteReason->delete($id);
+        return $this->success(null, 'Waste reason deleted');
+    }
+
 }

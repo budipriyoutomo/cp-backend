@@ -30,13 +30,14 @@ Route::post('/login-pin', [AuthController::class, 'loginByPin']);
 // MASTER ROUTES
 // ======================================================
 
-Route::middleware(['auth:api', 'role:admin,purchase'])
+Route::middleware(['auth:api', 'role:admin'])
     ->prefix('master')
     ->group(function () {
  
         Route::crud('platecolor', MasterController::class, 'platecolor'); 
         Route::crud('menu', MasterController::class, 'menu');
         Route::crud('outlet', MasterController::class, 'outlet');
+        Route::crud('waste-reason', MasterController::class, 'wastereason');
 
 });
 

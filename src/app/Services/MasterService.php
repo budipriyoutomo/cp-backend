@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Services\Master\PlateColorService;
 use App\Services\Master\MenuService;
 use App\Services\Master\OutletService;
+use App\Services\Master\WasteReasonService;
 
 class MasterService
 {
     public function __construct(
         public PlateColorService $plateColor,
         public MenuService $menu,
-        public OutletService $outlet
+        public OutletService $outlet,
+        public WasteReasonService $wasteReason
     ) {}
 }

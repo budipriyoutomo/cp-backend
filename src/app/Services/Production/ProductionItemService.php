@@ -166,4 +166,21 @@ class ProductionItemService extends BaseService
             ->whereIn('id', $ids)
             ->update(['status' => 'expired']);
     }
+        
+    public function getSoldItem($outletId, $date)
+    {
+        return $this->query() 
+            ->leftJoin('plate_colors', DB::raw('plate_colors.id::text'), '=', 'production_items.plate_color')
+            ->where('production_items.outlet_id', $outletId)
+            ->whereDate('production_items.sold_at', $date)
+            ->groupBy('plate_colors.id', 'plate_colors.platename')
+            ->get([
+                'plate_colors.id as plate_color_id',
+                'plate_colors.platename as plate_color_name',
+                DB::raw('SUM(production_items.quantity) as quantity'),
+            ]);
+    }
+ 
+ 
+
 }

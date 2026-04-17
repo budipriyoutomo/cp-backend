@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MasterController;
 use App\Http\Controllers\ProductionController;
+use App\Http\Controllers\POSController;
 
 /*
 |--------------------------------------------------------------------------
@@ -64,4 +65,14 @@ Route::prefix('production')->group(function () {
 
     Route::post('/waste', [ProductionController::class, 'wasteStore']);
     Route::get('/waste', [ProductionController::class, 'wasteIndex']);
+});
+
+// ======================================================
+// REPORT ROUTES
+// ======================================================
+
+Route::prefix('reports')->group(function () {
+
+    Route::get('/pos-data', [POSController::class, 'getposData']);
+     
 });

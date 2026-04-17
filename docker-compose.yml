@@ -60,7 +60,29 @@ services:
       - "traefik.http.routers.api-redirect.entrypoints=web"
       - "traefik.http.routers.api-redirect.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+  # 🔥 Worker RabbitMQ Consumer
+  posdata-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: posdata-worker
+    restart: always
 
+    command: php artisan rabbit:consume-posdata
+
+    networks:
+      - internal_net
+
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+      # 🔥 RabbitMQ External
+      RABBITMQ_HOST: maharasa-rabbitmq    
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: maharasa
+      RABBITMQ_PASSWORD: b@nd0eng
+      
 networks:
   internal_net:
     driver: bridge

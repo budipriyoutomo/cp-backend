@@ -13,6 +13,7 @@ class POSComparisonResource extends JsonResource
             'plateColorName' => $this['plateColorName'],
             'posSold' => $this['posSold'],
             'productionSold' => $this['productionSold'],
+            'productionWaste' => $this['productionWaste'],
             'selisih' => $this['selisih'],
         ];
     }

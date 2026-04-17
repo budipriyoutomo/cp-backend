@@ -31,14 +31,20 @@ namespace App\Http\Controllers;
                 $request->date
             );
 
-            $dataProductionItems = $this->productionItemService->getSoldItem(
+            $dataSoldItems = $this->productionItemService->getSoldItem(
+                $request->outletId,
+                $request->date
+            ); 
+
+            $dataWasteItems = $this->productionItemService->getWasteItem(
                 $request->outletId,
                 $request->date
             ); 
 
             $comparison = $this->buildPlateColorComparison(
                 $dataPOS,
-                $dataProductionItems
+                $dataSoldItems,
+                $dataWasteItems
             );
 
             return response()->json([
@@ -49,9 +55,11 @@ namespace App\Http\Controllers;
  
             ]); 
         }
-        private function buildPlateColorComparison($posData, $productionData)
+
+        
+        private function buildPlateColorComparison($posData, $soldItems, $wasteItems)
         {
-            // ✅ POS tetap sama
+            // ✅ POS
             $pos = collect($posData)
                 ->groupBy('plate_color_id')
                 ->map(function ($items) {
@@ -64,8 +72,8 @@ namespace App\Http\Controllers;
                     ];
                 });
 
-            // ✅ Production sudah aggregated dari DB → tidak perlu group lagi
-            $production = collect($productionData)
+            // ✅ Production Sold
+            $sold = collect($soldItems)
                 ->keyBy('plate_color_id')
                 ->map(function ($item) {
                     return [
@@ -75,32 +83,51 @@ namespace App\Http\Controllers;
                     ];
                 });
 
+            // ✅ Waste
+            $waste = collect($wasteItems)
+                ->keyBy('plate_color_id')
+                ->map(function ($item) {
+                    return [
+                        'plateColorId' => $item->plate_color_id,
+                        'plateColorName' => $item->plate_color_name ?? 'Unknown',
+                        'waste' => (int) $item->quantity,
+                    ];
+                });
+
             // ✅ gabungkan semua key
             $keys = $pos->keys()
-                ->merge($production->keys())
+                ->merge($sold->keys())
+                ->merge($waste->keys())
                 ->filter()
                 ->unique();
 
-            return $keys->map(function ($key) use ($pos, $production) {
+            return $keys->map(function ($key) use ($pos, $sold, $waste) {
 
                 $posItem = $pos->get($key);
-                $prodItem = $production->get($key);
+                $soldItem = $sold->get($key);
+                $wasteItem = $waste->get($key);
 
                 $posSold = $posItem['posSold'] ?? 0;
-                $productionSold = $prodItem['productionSold'] ?? 0;
+                $productionSold = $soldItem['productionSold'] ?? 0;
+                $wasteQty = $wasteItem['waste'] ?? 0;
 
                 return [
                     'plateColorId' => $key,
                     'plateColorName' => $posItem['plateColorName']
-                        ?? $prodItem['plateColorName']
+                        ?? $soldItem['plateColorName']
+                        ?? $wasteItem['plateColorName']
                         ?? 'Unknown',
 
                     'posSold' => $posSold,
                     'productionSold' => $productionSold,
-                    'selisih' => $posSold - $productionSold,
+                    'productionWaste' => $wasteQty,
+
+                    // 🔥 kamu bisa pilih rumus ini
+                    'selisih' => $posSold - ($productionSold + $wasteQty),
                 ];
             })->values();
         }
+
         public function subscribePOSData(Request $request)
         {
             

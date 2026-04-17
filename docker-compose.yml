@@ -78,7 +78,7 @@ services:
       APP_DEBUG: "false"
 
       # 🔥 RabbitMQ External
-      RABBITMQ_HOST: maharasa-rabbitmq    
+      RABBITMQ_HOST: 202.138.226.247   
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: maharasa
       RABBITMQ_PASSWORD: b@nd0eng

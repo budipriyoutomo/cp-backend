@@ -195,6 +195,27 @@ class ProductionItemService extends BaseService
             ]);
     }
  
+    public function getProductionMenuDetail(
+        string $outletId,
+        string $date,
+        string $plateColorId
+    ) {
+
+    $date = \Carbon\Carbon::parse($date)->toDateString();
+
+    return ProductionItem::selectRaw("
+            menu_id,
+            sum(quantity) as total_produced,
+            SUM(CASE WHEN sold_at IS NOT NULL THEN quantity ELSE 0 END) as total_sold,
+            SUM(CASE WHEN wasted_at IS NOT NULL THEN quantity ELSE 0 END) as total_wasted
+        ")
+        ->where('outlet_id', $outletId)
+        ->whereDate('produced_at', $date)
+        ->where('plate_color', $plateColorId)
+        ->groupBy('menu_id')
+        ->with('menu')
+        ->get();
+    } 
  
 
 }

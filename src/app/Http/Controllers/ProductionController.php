@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
     use Illuminate\Http\Request; 
     use App\Http\Resources\Production\ProductionItemResource;
     use App\Http\Resources\Production\WasteRecordResource;
+    use App\Http\Resources\Production\ProductionMenuResource;
 
     use App\Http\Requests\Production\ProductionProduceRequest;
     use App\Http\Requests\Production\ProductionPlanRequest;
@@ -203,7 +204,28 @@ namespace App\Http\Controllers;
             );
         }
 
-        
+        public function productionMenuDetail(Request $request)
+        {
+             $request->validate([
+                    'outletId' => 'required|uuid',
+                    'date' => 'required|date',
+                    'plateColorId' => 'required|uuid',
+                ]);
+                
+            $data = $this->service->item->getProductionMenuDetail(
+                $request->outletId,
+                $request->date,
+                $request->plateColorId
+            );
+
+
+            return response()->json([
+                'success' => true,
+                'data' => ProductionMenuResource::collection($data)
+            ]);
+        }
+
+         /*
 
         /*
         |--------------------------------------------------------------------------

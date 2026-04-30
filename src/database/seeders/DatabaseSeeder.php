@@ -20,8 +20,8 @@ class DatabaseSeeder extends Seeder
         // ]);
 
         $this->call([
-            PosDataSeeder::class,
             ProductionItemSeeder::class,
+            PosDataSeeder::class,
         ]);
         
     }

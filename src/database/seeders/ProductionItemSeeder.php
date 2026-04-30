@@ -3,89 +3,115 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\ProductionItem;
-use App\Models\Menu;
-use App\Models\Outlet;
-use App\Models\PlateColors;
+use App\Models\ProductionItem; 
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ProductionItemSeeder extends Seeder
 {
     public function run(): void
     {
-        // Optional: kosongkan dulu
-        ProductionItem::truncate();
+        DB::table('production_items')->truncate();
 
-        $menus = Menu::pluck('id')->toArray();
-        $outlets = Outlet::pluck('id')->toArray();
-        $plateColors = PlateColors::pluck('id')->toArray();
+        $menuMap = [];
 
-        if (empty($menus) || empty($outlets) || empty($plateColors)) {
-            $this->command->warn('❌ Menu / Outlet / PlateColor masih kosong!');
-            return;
+        foreach (DB::table('menus')->select('id', 'plate_color_id')->get() as $m) {
+            $menuMap[$m->plate_color_id][] = $m->id;
         }
 
-        $data = [];
+        $outlets = DB::table('outlets')->pluck('id')->toArray();
+        $plateColors = array_keys($menuMap);
 
-        for ($i = 0; $i < 100; $i++) {
+        $batch = [];
+        $batchSize = 200;
 
-            // Random waktu produksi (0 - 90 menit lalu)
-            $producedAt = Carbon::now()->subMinutes(rand(0, 90));
+        for ($d = 0; $d < 3; $d++) {
 
-            // Expired 60 menit setelah produksi
-            $expiresAt = (clone $producedAt)->addMinutes(60);
+            $date = now()->subDays($d)->toDateString();
 
-            // Tentukan status berdasarkan waktu
-            $now = now();
+            foreach ($outlets as $outletId) {
+                foreach ($plateColors as $plateColorId) {
 
-            if ($expiresAt <= $now) {
-                $beltStatus = 'expired';
-            } elseif ($expiresAt <= $now->copy()->addMinutes(15)) {
-                $beltStatus = 'warning';
-            } else {
-                $beltStatus = 'fresh';
-            }
+                    $menuIds = $menuMap[$plateColorId];
 
-            // Final status logic
-            $finalStatus = null;
-            $soldAt = null;
-            $wastedAt = null;
+                    $producedQty = rand(20, 80);
 
-            if ($beltStatus === 'expired') {
-                $finalStatus = 'wasted';
-                $wastedAt = $expiresAt;
-            } else {
-                // 70% kemungkinan terjual
-                if (rand(1, 100) <= 70) {
-                    $finalStatus = 'sold';
-                    $soldAt = (clone $producedAt)->addMinutes(rand(5, 40));
+                    // 🔥 tentukan rasio sold (biar realistis)
+                    $soldTarget = rand(
+                        (int)($producedQty * 0.6),
+                        (int)($producedQty * 0.9)
+                    );
+
+                    for ($i = 0; $i < $producedQty; $i++) {
+
+                        $menuId = $menuIds[array_rand($menuIds)];
+
+                        $hour = rand(10, 22);
+                        $minute = rand(0, 59);
+
+                        $producedAt = "$date $hour:$minute:00";
+                        $expiresAt = date('Y-m-d H:i:s', strtotime("$producedAt +60 minutes"));
+
+                        $finalStatus = null;
+                        $soldAt = null;
+                        $wastedAt = null;
+
+                        if ($i < $soldTarget) {
+                            // ✅ SOLD
+                            $finalStatus = 'sold';
+                            $soldAt = date('Y-m-d H:i:s', strtotime("$producedAt +" . rand(5, 40) . " minutes"));
+                        } else {
+                            // ✅ WASTE
+                            $finalStatus = 'wasted';
+                            $wastedAt = $expiresAt;
+                        }
+
+                        // belt status (opsional, bisa sinkron dengan final_status)
+                        $now = date('Y-m-d H:i:s');
+
+                        if ($expiresAt <= $now) {
+                            $beltStatus = 'expired';
+                        } elseif ($expiresAt <= date('Y-m-d H:i:s', strtotime("$now +15 minutes"))) {
+                            $beltStatus = 'warning';
+                        } else {
+                            $beltStatus = 'fresh';
+                        }
+
+                        $batch[] = [
+                            'id' => (string) Str::uuid(),
+                            'menu_id' => $menuId,
+                            'outlet_id' => $outletId,
+                            'plate_color' => $plateColorId,
+                            'quantity' => 1,
+
+                            'produced_at' => $producedAt,
+                            'expires_at' => $expiresAt,
+
+                            'belt_status' => $beltStatus,
+                            'final_status' => $finalStatus,
+
+                            'sold_at' => $soldAt,
+                            'wasted_at' => $wastedAt,
+
+                            'notes' => 'Generated production',
+
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+
+                        if (count($batch) >= $batchSize) {
+                            DB::table('production_items')->insert($batch);
+                            $batch = [];
+                            gc_collect_cycles();
+                        }
+                    }
                 }
             }
-
-            $data[] = [
-                'id' => (string) Str::uuid(),
-                'menu_id' => $menus[array_rand($menus)],
-                'outlet_id' => $outlets[array_rand($outlets)],
-                'plate_color' => $plateColors[array_rand($plateColors)],
-                'quantity' => rand(1, 5),
-
-                'produced_at' => $producedAt,
-                'expires_at' => $expiresAt,
-
-                'belt_status' => $beltStatus,
-                'final_status' => $finalStatus,
-
-                'sold_at' => $soldAt,
-                'wasted_at' => $wastedAt,
-
-                'notes' => 'Seeder generated',
-
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
         }
 
-        ProductionItem::insert($data);
+        if (!empty($batch)) {
+            DB::table('production_items')->insert($batch);
+        }
     }
 }

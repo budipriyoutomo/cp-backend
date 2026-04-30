@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MasterController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\POSController;
+use App\Http\Controllers\SalesController;
 
 /*
 |--------------------------------------------------------------------------
@@ -76,4 +77,10 @@ Route::prefix('reports')->group(function () {
     Route::get('/pos-data', [POSController::class, 'getposData']);
     Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
      
+});
+
+Route::prefix('sales')->group(function () {
+    Route::post('/', [SalesController::class, 'store']);
+    Route::get('/{id}', [SalesController::class, 'show']);
+    Route::get('/by-date', [SalesController::class, 'byDate']);
 });

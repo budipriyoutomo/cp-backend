@@ -121,9 +121,8 @@ namespace App\Http\Controllers;
                     'posSold' => $posSold,
                     'productionSold' => $productionSold,
                     'productionWaste' => $wasteQty,
-
-                    // 🔥 kamu bisa pilih rumus ini
-                    'selisih' => $posSold - ($productionSold + $wasteQty),
+ 
+                    'selisih' => $posSold - $productionSold,
                 ];
             })->values();
         }

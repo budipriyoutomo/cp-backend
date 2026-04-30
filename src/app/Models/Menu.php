@@ -9,6 +9,7 @@ class Menu extends BaseModel
     protected $table = 'menus'; 
  
     protected $fillable = [
+        'code',
         'menuname',
         'description',
         'image',

@@ -11,44 +11,44 @@ class PosDataSeeder extends Seeder
 {
     public function run(): void
     {
-        // Ambil data relasi
-        $plateColors = DB::table('plate_colors')->pluck('id')->toArray();
-        $outlets = DB::table('outlets')->pluck('id')->toArray();
-
-        if (empty($plateColors) || empty($outlets)) {
-            $this->command->warn('Plate colors / outlets kosong!');
-            return;
-        }
+        DB::table('posdata')->truncate();
 
         $data = [];
 
-        // generate data 30 hari terakhir
-        for ($i = 0; $i < 30; $i++) {
-            $date = Carbon::now()->subDays($i)->toDateString();
+        // 🔥 hanya 3 hari terakhir
+        $dates = collect(range(0, 2))->map(fn($i) => now()->subDays($i)->toDateString());
 
-            foreach ($outlets as $outletId) {
-                foreach ($plateColors as $plateColorId) {
+        // 🔥 ambil production summary
+        $productions = DB::table('production_items')
+            ->selectRaw("
+                plate_color,
+                outlet_id,
+                DATE(produced_at) as date,
+                COUNT(*) as total_production
+            ")
+            ->whereDate('produced_at', '>=', now()->subDays(3))
+            ->groupBy('plate_color', 'outlet_id', 'date')
+            ->get();
 
-                    $data[] = [
-                        'id' => Str::uuid(),
+        foreach ($productions as $p) {
 
-                        'plate_color_id' => $plateColorId,
-                        'outlet_id' => $outletId,
+            // 🔥 POS ≤ production
+            $sold = rand(0, $p->total_production);
 
-                        'date' => $date,
-                        'sold' => rand(0, 100),
+            $data[] = [
+                'id' => Str::uuid(),
+                'plate_color_id' => $p->plate_color,
+                'outlet_id' => $p->outlet_id,
+                'date' => $p->date,
+                'sold' => $sold,
 
-                        'created_at' => now(),
-                        'updated_at' => now(),
-
-                        // fullstamps (sesuaikan dengan project kamu)
-                        'created_by' => 'seeder',
-                        'updated_by' => 'seeder',
-                        'deleted_at' => null,
-                        'deleted_by' => null,
-                    ];
-                }
-            }
+                'created_at' => now(),
+                'updated_at' => now(),
+                'created_by' => 'seeder',
+                'updated_by' => 'seeder',
+                'deleted_at' => null,
+                'deleted_by' => null,
+            ];
         }
 
         DB::table('posdata')->insert($data);

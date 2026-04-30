@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
 use App\Services\BaseAggregateService;
+use Illuminate\Http\Request; 
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class SalesService extends BaseAggregateService
 {
@@ -191,5 +193,59 @@ class SalesService extends BaseAggregateService
     {
         return SalesHeader::with(['items.details', 'items.plateColor'])
             ->findOrFail($id);
+    }
+
+   
+    public function list(Request $request): LengthAwarePaginator
+    {
+        $query = $this->query();
+
+        // ==========================
+        // RELATIONS (custom)
+        // ==========================
+        $query->with([
+            'items.details',
+            'items.plateColor'
+        ]);
+
+        // ==========================
+        // FILTER KHUSUS
+        // ==========================
+        if ($request->filled('outlet_id')) {
+            $query->where('outlet_id', $request->outlet_id);
+        }
+
+        if ($request->filled('date')) {
+            $query->whereDate('date', $request->date);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('date', [
+                $request->start_date,
+                $request->end_date
+            ]);
+        }
+
+        // ==========================
+        // SEARCH (optional)
+        // ==========================
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->orWhere('notes', 'like', "%{$search}%");
+                // tambahin field lain kalau perlu
+            });
+        }
+
+        // ==========================
+        // SORT (default terbaru)
+        // ==========================
+        $query->orderBy('date', 'desc');
+
+        // ==========================
+        // PAGINATION
+        // ==========================
+        $perPage = min((int) $request->query('per_page', 15), 100);
+
+        return $query->paginate($perPage);
     }
 }

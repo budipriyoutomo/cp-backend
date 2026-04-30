@@ -14,6 +14,16 @@ class SalesController extends Controller
     ) {}
 
     // ==========================
+    // LIST
+    // ==========================
+    public function index(Request $request)
+    {
+        return SalesResource::collection(
+            $this->service->list($request)
+        );
+    }
+
+    // ==========================
     // CREATE (AGGREGATE)
     // ==========================
     public function store(StoreSalesRequest $request)
@@ -41,6 +51,7 @@ class SalesController extends Controller
             $sales->load('items.details','items.plateColor')
         );
     }
+
 
     // ==========================
     // SHOW DETAIL

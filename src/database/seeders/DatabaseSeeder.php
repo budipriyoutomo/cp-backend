@@ -20,6 +20,8 @@ class DatabaseSeeder extends Seeder
         // ]);
 
         $this->call([
+            PlateColorSeeder::class,
+            MenuSeeder::class,
             ProductionItemSeeder::class,
             PosDataSeeder::class,
         ]);

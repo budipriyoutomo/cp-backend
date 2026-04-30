@@ -80,6 +80,7 @@ Route::prefix('reports')->group(function () {
 });
 
 Route::prefix('sales')->group(function () {
+    Route::get('/', [SalesController::class, 'list']);
     Route::post('/', [SalesController::class, 'store']);
     Route::get('/{id}', [SalesController::class, 'show']);
     Route::get('/by-date', [SalesController::class, 'byDate']);

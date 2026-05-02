@@ -10,7 +10,7 @@ class ProductionExpiredChangeRequest extends BaseRequest
     {
         return [
                 'status' => 'required|in:sold,waste',
-                'notes'  => 'required|string|max:255',
+                'notes'  => 'nullable|string|max:255',
             ];
     } 
 }

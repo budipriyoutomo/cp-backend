@@ -23,24 +23,23 @@ class BaseService
         return app($this->model)->newQuery();
     }
 
-    public function list(Request $request): LengthAwarePaginator
+    protected function buildQuery(Request $request)
     {
         $query = $this->query();
 
-        // 🔥 INCLUDE RELATION (?include=plateColor)
+        // include
         $includes = $request->query('include');
         $relations = $this->relations;
 
         if ($includes) {
-            $requested = explode(',', $includes);
-            $relations = array_merge($relations, $requested);
+            $relations = array_merge($relations, explode(',', $includes));
         }
 
         if (!empty($relations)) {
             $query->with(array_unique($relations));
         }
 
-        // 🔥 SEARCH (?search=salmon)
+        // search
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 foreach ($this->searchable as $field) {
@@ -49,18 +48,16 @@ class BaseService
             });
         }
 
-        // 🔥 FILTER (?plate_color_id=xxx)
+        // filter
         foreach ($request->query() as $key => $value) {
             if (in_array($key, $this->searchable)) {
                 $query->where($key, $value);
             }
         }
 
-        // 🔥 SORT (?sort=price,-created_at)
+        // sort
         if ($sort = $request->query('sort')) {
-            $fields = explode(',', $sort);
-
-            foreach ($fields as $field) {
+            foreach (explode(',', $sort) as $field) {
                 $direction = str_starts_with($field, '-') ? 'desc' : 'asc';
                 $field = ltrim($field, '-');
 
@@ -70,10 +67,23 @@ class BaseService
             }
         }
 
-        // 🔥 PAGINATION
-        $perPage = (int) $request->query('per_page', 15);
+        return $query;
+    }
 
-        return $query->paginate($perPage);
+    public function list(Request $request): LengthAwarePaginator
+    { 
+        $query = $this->buildQuery($request);
+
+        if ($request->query('per_page') === 'all') {
+            return $query->get();
+        }
+
+        return $query->paginate((int) $request->query('per_page', 15));
+    }
+
+    public function all(Request $request)
+    {
+        return $this->buildQuery($request)->get();
     }
 
     public function find($id, array $with = []): ?Model

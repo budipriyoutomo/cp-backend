@@ -65,10 +65,11 @@ class MasterController extends BaseApiController
     // ======================================================
 
     public function menuindex(Request $request)
-    {
-        return $this->resource(
-            MenuResource::collection($this->service->menu->list($request))
-        );
+    {  
+
+       return $this->resource(
+            MenuResource::collection($this->service->menu->all($request))
+        ); 
     }
 
     public function menustore(MenuRequest $request)

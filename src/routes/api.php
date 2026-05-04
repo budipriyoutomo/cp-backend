@@ -76,7 +76,7 @@ Route::prefix('production')->group(function () {
 Route::prefix('reports')->group(function () {
     
     Route::get('/pos-data', [POSController::class, 'getposData']);
-    Route::get('/production-item-list', [ProductionController::class, 'productionList']);
+    Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
 });
 
 Route::prefix('sales')->group(function () {

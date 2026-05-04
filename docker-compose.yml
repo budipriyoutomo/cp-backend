@@ -82,6 +82,7 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: maharasa
       RABBITMQ_PASSWORD: b@nd0eng
+      RABBITMQ_VHOST: /
       
 networks:
   internal_net:

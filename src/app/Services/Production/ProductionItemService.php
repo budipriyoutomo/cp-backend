@@ -6,6 +6,7 @@ use App\Models\ProductionItem;
 use App\Models\Menu;
 use App\Services\BaseService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log; 
 
 class ProductionItemService extends BaseService
 {
@@ -112,7 +113,16 @@ class ProductionItemService extends BaseService
             ->where('belt_status', 'expired')
             ->whereNull('final_status')
             ->first(); 
+            
+        if (!$item) {
+            Log::warning('Update expired skipped', [
+                'id' => $data['id'],
+                'reason' => 'Not found / already processed / invalid status'
+            ]);
 
+            return null;  
+        }
+        
         $updateData = [
             'final_status' => $data['status'],
             'notes'        => $data['notes'],

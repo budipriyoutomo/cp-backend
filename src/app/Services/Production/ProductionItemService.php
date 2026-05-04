@@ -217,5 +217,14 @@ class ProductionItemService extends BaseService
         ->get();
     } 
  
-
+    public function getProductionList(
+        string $outletId,
+        string $date
+    ) {
+    $date = \Carbon\Carbon::parse($date)->toDateString();
+    return ProductionItem::where('outlet_id', $outletId)
+        ->whereDate('produced_at', $date)
+        ->with('menu')
+        ->get();
+    }
 }

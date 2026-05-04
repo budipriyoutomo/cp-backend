@@ -248,4 +248,22 @@ namespace App\Http\Controllers;
 
             return $items;
         }
+
+        public function productionList(Request $request)
+        {
+            $request->validate([
+                'outletId' => 'required|uuid',
+                'date' => 'required|date',
+            ]);
+
+            $data = $this->service->item->getProductionList(
+                $request->outletId,
+                $request->date
+            ); 
+            
+            return response()->json([
+                'success' => true,
+                'data' => ProductionItemResource::collection($data)
+            ]);
+        }
     }

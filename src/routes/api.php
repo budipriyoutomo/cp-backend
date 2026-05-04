@@ -66,6 +66,7 @@ Route::prefix('production')->group(function () {
 
     Route::post('/waste', [ProductionController::class, 'wasteStore']);
     Route::get('/waste', [ProductionController::class, 'wasteIndex']);
+    Route::get('/items', [ProductionController::class, 'productionList']);
 });
 
 // ======================================================
@@ -73,10 +74,9 @@ Route::prefix('production')->group(function () {
 // ======================================================
 
 Route::prefix('reports')->group(function () {
-
+    
     Route::get('/pos-data', [POSController::class, 'getposData']);
-    Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
-     
+    Route::get('/production-item-list', [ProductionController::class, 'productionList']);
 });
 
 Route::prefix('sales')->group(function () {

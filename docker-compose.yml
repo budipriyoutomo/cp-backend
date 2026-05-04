@@ -36,6 +36,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: api-app
     container_name: api-app
     restart: always
     depends_on:

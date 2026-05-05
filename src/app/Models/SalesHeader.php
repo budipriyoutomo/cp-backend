@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SalesHeader extends BaseModel
 {
-    protected $table = 'sales';
+    protected $table = 'sales_headers';
 
     protected $fillable = [
         'id',

@@ -66,24 +66,19 @@ services:
     image: api-app
     container_name: posdata-worker
     restart: always
-    depends_on:
-      - redis
     networks:
       - internal_net
-    command: >
-      sh -c "sleep 5 && php artisan rabbit:consume-posdata"
     environment:
       APP_ENV: production
-      APP_DEBUG: "false" 
-      CACHE_DRIVER: redis
-      SESSION_DRIVER: redis
-      REDIS_HOST: redis 
-      QUEUE_CONNECTION: rabbitmq 
+      APP_DEBUG: "false"
+      QUEUE_CONNECTION: rabbitmq
       RABBITMQ_HOST: 202.138.226.247
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: maharasa
       RABBITMQ_PASSWORD: b@nd0eng
       RABBITMQ_VHOST: /
+    volumes:
+      - ./docker/supervisord-worker.conf:/etc/supervisor/conf.d/supervisord.conf
 
 networks:
   internal_net:

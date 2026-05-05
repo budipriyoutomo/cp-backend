@@ -34,11 +34,11 @@ class RabbitConsumePOSData extends Command
                     'AMQPLAIN',
                     null,
                     'en_US',
-                    3.0,
+                    10.0,
                     180.0,
                     null,
                     false,
-                    60
+                    30
                 );
 
                 $channel = $connection->channel();

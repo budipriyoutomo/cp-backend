@@ -28,12 +28,15 @@ class POSService
         return DB::transaction(function () use ($data) {
 
             // 🔥 normalize
-            $plateName = strtolower(trim($data['platecolor']));
-            $outletCode = strtolower(trim($data['outlet']));
+            $plateName = strtolower(trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $data['platecolor'])));
+            $plateName = preg_replace('/\s+/u', ' ', $plateName);
+            $outletCode = strtolower(trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $data['outlet'])));
+            $outletCode = preg_replace('/\s+/u', ' ', $outletCode);
+
 
             // 🔥 mapping plate color
             $plate = PlateColors::whereRaw('LOWER(TRIM(platename)) = ?', [$plateName])->first(); 
-            
+
             if (!$plate) {
                 throw new \Exception("Plate color not found: {$plateName}");
             }

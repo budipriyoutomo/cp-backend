@@ -28,18 +28,18 @@ class POSService
         return DB::transaction(function () use ($data) {
 
             // 🔥 normalize
-            $plateName = strtolower($data['platecolor']);
-            $outletCode = strtolower($data['outlet']);
+            $plateName = strtolower(trim($data['platecolor']));
+            $outletCode = strtolower(trim($data['outlet']));
 
             // 🔥 mapping plate color
-            $plate = PlateColors::whereRaw('LOWER(platename) = ?', [$plateName])->first();
-
+            $plate = PlateColors::whereRaw('LOWER(TRIM(platename)) = ?', [$plateName])->first(); 
+            
             if (!$plate) {
                 throw new \Exception("Plate color not found: {$plateName}");
             }
 
-            // 🔥 mapping outlet
-            $outlet = Outlet::whereRaw('LOWER(code) = ?', [$outletCode])->first();
+            // 🔥 mapping outlet 
+            $outlet = Outlet::whereRaw('LOWER(TRIM(code)) = ?', [$outletCode])->first(); 
 
             if (!$outlet) {
                 throw new \Exception("Outlet not found: {$outletCode}");

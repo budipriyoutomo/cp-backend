@@ -90,17 +90,17 @@ class RabbitConsumePOSData extends Command
                     false,
                     $callback
                 );
- 
-               while (count($channel->callbacks)) {
-                        $channel->wait();
-                    }
+                $this->info('✅ SUBSCRIBED TO QUEUE');
+
+                while (true) {
+                    $channel->wait();
+                }
 
             } catch (\Throwable $e) {
 
                 Log::error('❌ RabbitMQ Connection Error: ' . $e->getMessage());
                 $this->error('❌ ERROR: ' . $e->getMessage());
-
-                // 🔥 cleanup (WAJIB)
+ 
                 try {
                     if (isset($channel)) {
                         $channel->close();
@@ -109,8 +109,7 @@ class RabbitConsumePOSData extends Command
                         $connection->close();
                     }
                 } catch (\Throwable $e) {}
-
-                // 🔥 retry delay
+ 
                 sleep(5);
             }
         }

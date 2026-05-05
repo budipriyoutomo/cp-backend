@@ -1,4 +1,5 @@
 <?php 
+
 return [
     'host' => env('RABBITMQ_HOST', 'rabbitmq'),
     'port' => env('RABBITMQ_PORT', 5672),

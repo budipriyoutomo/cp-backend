@@ -21,11 +21,11 @@ class RabbitConsumePOSData extends Command
 
                 // 🔥 CONNECT (with heartbeat + keepalive)
                 $connection = new AMQPStreamConnection(
-                    env('RABBITMQ_HOST', 'rabbitmq'),
-                    env('RABBITMQ_PORT', 5672),
-                    env('RABBITMQ_USER', 'maharasa'),
-                    env('RABBITMQ_PASSWORD', 'maharasa123'),
-                    env('RABBITMQ_VHOST', '/'),
+                    config('rabbitmq.host'),
+                    config('rabbitmq.port'),
+                    config('rabbitmq.user'),
+                    config('rabbitmq.password'),
+                    config('rabbitmq.vhost'),
                     false,
                     'AMQPLAIN',
                     null,

@@ -19,7 +19,7 @@ class RabbitConsumePOSData extends Command
         $this->info('HOST: ' . config('rabbitmq.host'));
         $this->info('USER: ' . config('rabbitmq.user'));
         $this->info('VHOST: ' . config('rabbitmq.vhost'));
-        
+
         while (true) {
             try {
 
@@ -98,6 +98,7 @@ class RabbitConsumePOSData extends Command
             } catch (\Throwable $e) {
 
                 Log::error('❌ RabbitMQ Connection Error: ' . $e->getMessage());
+                $this->error('❌ ERROR: ' . $e->getMessage());
 
                 // 🔥 cleanup (WAJIB)
                 try {

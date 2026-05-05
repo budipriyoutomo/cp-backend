@@ -15,7 +15,11 @@ class RabbitConsumePOSData extends Command
     public function handle(POSService $posService)
     {
         $this->info('🚀 Worker started, waiting for messages...');
-
+        $this->info('📡 Connecting...');
+        $this->info('HOST: ' . config('rabbitmq.host'));
+        $this->info('USER: ' . config('rabbitmq.user'));
+        $this->info('VHOST: ' . config('rabbitmq.vhost'));
+        
         while (true) {
             try {
 

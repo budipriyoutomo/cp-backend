@@ -37,7 +37,7 @@ class RabbitConsumePOSData extends Command
                     3.0,
                     180.0,
                     null,
-                    true,
+                    false,
                     60
                 );
 

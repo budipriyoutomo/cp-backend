@@ -72,8 +72,7 @@ class RabbitConsumePOSData extends Command
                         Log::error('❌ ERROR CONSUME POSDATA: ' . $e->getMessage(), [
                             'body' => $msg->body
                         ]);
-
-                        // ❗ jangan requeue (hindari infinite loop)
+ 
                         $channel->basic_nack(
                             $msg->delivery_info['delivery_tag'],
                             false,
@@ -92,9 +91,10 @@ class RabbitConsumePOSData extends Command
                     $callback
                 );
  
-                while (count($channel->callbacks)) {
-                    $channel->wait(null, false, 30);
-                }
+               while (count($channel->callbacks)) {
+                        $channel->wait();
+                    }
+
             } catch (\Throwable $e) {
 
                 Log::error('❌ RabbitMQ Connection Error: ' . $e->getMessage());

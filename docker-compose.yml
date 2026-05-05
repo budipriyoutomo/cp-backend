@@ -71,7 +71,7 @@ services:
     networks:
       - internal_net
     command: >
-      sh -c "php artisan rabbit:consume-posdata --sleep=3 --tries=3"
+      sh -c "php artisan rabbit:consume-posdata"
     environment:
       APP_ENV: production
       APP_DEBUG: "false" 

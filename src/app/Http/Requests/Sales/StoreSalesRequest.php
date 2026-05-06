@@ -22,8 +22,8 @@ class StoreSalesRequest extends BaseRequest
             'items.*.pos_sold' => ['required', 'integer', 'min:0'],
             'items.*.production_sold' => ['required', 'integer', 'min:0'],
             'items.*.production_waste' => ['nullable', 'integer', 'min:0'],
-            'items.*.adjustment' => ['nullable', 'integer', 'min:0'],
-            'items.*.compensation' => ['nullable', 'integer', 'min:0'],
+            'items.*.adjustment' => ['nullable', 'integer'],
+            'items.*.compensation' => ['nullable', 'integer'],
 
             'items.*.details' => ['nullable', 'array'],
 
@@ -32,8 +32,8 @@ class StoreSalesRequest extends BaseRequest
             'items.*.details.*.total_produced' => ['required', 'integer', 'min:0'],
             'items.*.details.*.total_sold' => ['required', 'integer', 'min:0'],
             'items.*.details.*.total_wasted' => ['required', 'integer', 'min:0'],
-            'items.*.details.*.adjustment' => ['nullable', 'integer', 'min:0'],
-            'items.*.details.*.compensation' => ['nullable', 'integer', 'min:0'],
+            'items.*.details.*.adjustment' => ['nullable', 'integer'],
+            'items.*.details.*.compensation' => ['nullable', 'integer'],
         ];
     }
 
@@ -53,8 +53,8 @@ class StoreSalesRequest extends BaseRequest
             'items.*.pos_sold' => ['required_with:items', 'integer', 'min:0'],
             'items.*.production_sold' => ['required_with:items', 'integer', 'min:0'],
             'items.*.production_waste' => ['nullable', 'integer', 'min:0'],
-            'items.*.adjustment' => ['nullable', 'integer', 'min:0'],
-            'items.*.compensation' => ['nullable', 'integer', 'min:0'],
+            'items.*.adjustment' => ['nullable', 'integer'],
+            'items.*.compensation' => ['nullable', 'integer'],
 
             'items.*.details' => ['nullable', 'array'],
 
@@ -63,8 +63,8 @@ class StoreSalesRequest extends BaseRequest
             'items.*.details.*.total_produced' => ['required_with:items.*.details', 'integer', 'min:0'],
             'items.*.details.*.total_sold' => ['required_with:items.*.details', 'integer', 'min:0'],
             'items.*.details.*.total_wasted' => ['required_with:items.*.details', 'integer', 'min:0'],
-            'items.*.details.*.adjustment' => ['nullable', 'integer', 'min:0'],
-            'items.*.details.*.compensation' => ['nullable', 'integer', 'min:0'],
+            'items.*.details.*.adjustment' => ['nullable', 'integer'],
+            'items.*.details.*.compensation' => ['nullable', 'integer'],
         ];
     }
 }

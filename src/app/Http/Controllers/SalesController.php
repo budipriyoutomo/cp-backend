@@ -24,6 +24,16 @@ class SalesController extends Controller
     }
 
     // ==========================
+    // LIST
+    // ==========================
+    public function drafts(Request $request)
+    {
+        return SalesResource::collection(
+            $this->service->list($request)
+        );
+    }
+
+    // ==========================
     // CREATE (AGGREGATE)
     // ==========================
     public function store(StoreSalesRequest $request)

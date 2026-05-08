@@ -23,6 +23,8 @@ class ProductionItem extends BaseModel
     protected $casts = [
         'produced_at' => 'datetime',
         'expires_at' => 'datetime',
+        'sold_at' => 'datetime',
+        'wasted_at' => 'datetime',
     ];
 
     /*

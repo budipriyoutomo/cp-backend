@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Sales\StoreSalesRequest;  
 use App\Http\Resources\Sales\SalesResource;
+use App\Http\Resources\Sales\SalesDraftResource;
 use App\Services\Sales\SalesService;
 use Illuminate\Http\Request;
 
@@ -28,7 +29,7 @@ class SalesController extends Controller
     // ==========================
     public function drafts(Request $request)
     {
-        return SalesResource::collection(
+        return SalesDraftResource::collection(
             $this->service->list($request)
         );
     }

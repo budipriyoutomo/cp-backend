@@ -7,6 +7,7 @@ use App\Http\Controllers\MasterController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\POSController;
 use App\Http\Controllers\SalesController;
+use App\Http\Controllers\WasteController;
 
 /*
 |--------------------------------------------------------------------------
@@ -84,4 +85,11 @@ Route::prefix('sales')->group(function () {
     Route::post('/', [SalesController::class, 'store']);
     Route::get('/{id}', [SalesController::class, 'show']);
     Route::get('/by-date', [SalesController::class, 'byDate']);
+});
+
+Route::prefix('waste')->group(function () {
+
+    Route::get('/', [WasteController::class, 'index']);
+    Route::get('/summary', [WasteController::class, 'summary']);
+    Route::get('/{waste}', [WasteController::class, 'show']);
 });

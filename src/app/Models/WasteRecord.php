@@ -36,4 +36,10 @@ class WasteRecord extends BaseModel
     {
         return $this->belongsTo(Outlet::class);
     }
+  
+    public function plateColor()
+    {
+        return $this->belongsTo(PlateColors::class, 'plate_color');
+    }
+
 }

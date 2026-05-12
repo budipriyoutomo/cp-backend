@@ -6,6 +6,7 @@ use App\Services\Production\ProductionDashboardService;
 use App\Services\Production\ProductionPlanService;
 use App\Services\Production\WasteRecordService;
 use App\Services\Production\ProductionItemService;
+use App\Services\Production\WasteService;
 
 class ProductionService
 {
@@ -13,6 +14,7 @@ class ProductionService
         public ProductionDashboardService $dashboard,
         public ProductionPlanService $plan,
         public WasteRecordService $waste,
-        public ProductionItemService $item
+        public ProductionItemService $item,
+        public WasteService $wasteService,
     ) {}
 }

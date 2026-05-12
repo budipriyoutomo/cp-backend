@@ -22,10 +22,10 @@ class SalesDraftResource extends BaseResource
 
                         'price' => (float) optional($item->platecolor)->price,
 
-                        'pos' => (int) ($item->pos ?? 0),
-                        'sold' => (int) ($item->sold ?? 0),
-                        'production' => (int) ($item->production ?? 0),
-                        'waste' => (int) ($item->waste ?? 0),
+                        'pos' => (int) ($item->pos_sold ?? 0),
+                        'sold' => (int) ($item->production_sold ?? 0),
+                        'production' => (int) ($item->production_sold ?? 0),
+                        'waste' => (int) ($item->production_waste ?? 0),
                         'adjustment' => (int) ($item->adjustment ?? 0),
                         'compensation' => (int) ($item->compensation ?? 0),
                         'selisih' => (int) ($item->selisih ?? 0),

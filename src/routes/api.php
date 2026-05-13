@@ -48,7 +48,7 @@ Route::prefix('master')
 
         });
 
-        Route::middleware('role:kitchen,service')->group(function () {
+        Route::middleware('role:admin,kitchen,service')->group(function () {
 
             Route::get('/platecolor', [MasterController::class, 'platecolorindex']);
             Route::get('/menu', [MasterController::class, 'menuindex']);

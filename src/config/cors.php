@@ -23,6 +23,7 @@ return [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'https://*.vercel.app',
+        'https://*.calira.my.id'
     ],
 
     'allowed_origins_patterns' => ['#^https://.*\.vusercontent\.net$#',],

@@ -28,21 +28,36 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/login-pin', [AuthController::class, 'loginByPin']);
+Route::middleware('auth:api')->get('/auth/me', [AuthController::class, 'me']);
+Route::middleware('auth:api')->post('/logout', [AuthController::class, 'logout']);
+
 
 // ======================================================
 // MASTER ROUTES
 // ======================================================
-
-Route::middleware(['auth:api', 'role:admin'])
-    ->prefix('master')
+Route::prefix('master')
+    ->middleware('auth:api')
     ->group(function () {
- 
-        Route::crud('platecolor', MasterController::class, 'platecolor'); 
-        Route::crud('menu', MasterController::class, 'menu');
-        Route::crud('outlet', MasterController::class, 'outlet');
-        Route::crud('waste-reason', MasterController::class, 'wastereason');
 
-});
+        Route::middleware('role:admin')->group(function () {
+
+            Route::crud('platecolor', MasterController::class, 'platecolor');
+            Route::crud('menu', MasterController::class, 'menu');
+            Route::crud('outlet', MasterController::class, 'outlet');
+            Route::crud('waste-reason', MasterController::class, 'wastereason');
+
+        });
+
+        Route::middleware('role:kitchen,service')->group(function () {
+
+            Route::get('/platecolor', [MasterController::class, 'platecolorindex']);
+            Route::get('/menu', [MasterController::class, 'menuindex']);
+            Route::get('/outlet', [MasterController::class, 'outletindex']);
+            Route::get('/waste-reason', [MasterController::class, 'wastereasonindex']);
+
+        });
+
+    });
 
 // ======================================================
 // PRODUCTION ROUTES

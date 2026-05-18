@@ -8,6 +8,7 @@ use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\POSController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\WasteController;
+use App\Http\Controllers\ClosingReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -100,6 +101,17 @@ Route::prefix('sales')->group(function () {
     Route::post('/', [SalesController::class, 'store']);
     Route::get('/{id}', [SalesController::class, 'show']);
     Route::get('/by-date', [SalesController::class, 'byDate']);
+});
+
+Route::prefix('closing-reports')->group(function () {
+    Route::get('/', [ClosingReportController::class, 'index']);
+    Route::get('/data', [ClosingReportController::class, 'data']);
+    Route::post('/draft', [ClosingReportController::class, 'storeDraft']);
+    Route::post('/submit', [ClosingReportController::class, 'submit']);
+    Route::post('/upload-photos', [ClosingReportController::class, 'uploadWastePhotos']);
+    Route::get('/{id}', [ClosingReportController::class, 'show']);
+    Route::put('/{id}', [ClosingReportController::class, 'updateDraft']);
+    Route::delete('/{id}', [ClosingReportController::class, 'destroy']);
 });
 
 Route::prefix('waste')->group(function () {

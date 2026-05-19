@@ -8,13 +8,15 @@ use App\Http\Requests\ClosingReport\SubmitClosingReportRequest;
 use App\Http\Requests\ClosingReport\UploadWastePhotosRequest;
 use App\Http\Resources\ClosingReport\ClosingReportResource;
 use App\Services\ClosingReport\ClosingReportService;
+use App\Services\Sales\SalesService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class ClosingReportController extends BaseApiController
 {
     public function __construct(
-        protected ClosingReportService $service
+        protected ClosingReportService $service,
+        protected SalesService $salesService
     ) {}
 
     public function index(Request $request)
@@ -28,12 +30,16 @@ class ClosingReportController extends BaseApiController
     {
         $validated = $request->validated();
 
-        $report = $this->service->getData(
+        $reportData = $this->salesService->getClosingReportData(
             $validated['outletId'],
             $validated['date']
         );
 
-        return $this->resource(new ClosingReportResource($report));
+        if (!$reportData['status']) {
+            return $this->error($reportData['message'], 404);
+        }
+
+        return $this->success($reportData['data'], $reportData['message']);
     }
 
     public function show(string $id)

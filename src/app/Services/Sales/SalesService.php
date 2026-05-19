@@ -2,12 +2,11 @@
 
 namespace App\Services\Sales;
 
-use App\Models\Sales;
 use App\Models\SalesHeader;
 use App\Models\SalesItem;
 use App\Models\SalesItemDetail;
+use App\Http\Resources\Sales\SalesClosingReportResource;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 
 use App\Services\BaseAggregateService;
 use Illuminate\Http\Request; 
@@ -183,7 +182,7 @@ class SalesService extends BaseAggregateService
     // ==========================
     public function getByDateOutlet(string $outletId, string $date)
     {
-        return SalesHeader::with(['items.details', 'items.plateColor'])
+        return SalesHeader::with(['outlet', 'items.details.menu.plateColor', 'items.plateColor'])
             ->where('outlet_id', $outletId)
             ->whereDate('date', $date)
             ->first();
@@ -247,5 +246,38 @@ class SalesService extends BaseAggregateService
         $perPage = min((int) $request->query('per_page', 15), 100);
 
         return $query->paginate($perPage);
+    }
+
+    public function getClosingReportData(string $outletId, string $date): array
+    {
+        $salesHeader = SalesHeader::query()
+                ->with([
+                    'outlet',
+                    'items.platecolor',
+                    'items.details.menu.category',
+                    'items.details.menu.plateColor',
+                ])
+                ->where('outlet_id', $outletId)
+                ->whereDate('date', $date) 
+                ->whereNotNull('submitted_at') 
+                ->where('status', 'submitted') 
+                ->first();
+
+            if (!$salesHeader) {
+
+                return [
+                    'status' => false,
+                    'message' => 'No submitted sales data found',
+                    'data' => null,
+                ];
+            }
+
+            return [
+                'status' => true,
+                'message' => 'Success',
+                'data' => (
+                    new SalesClosingReportResource($salesHeader)
+                )->resolve(),
+            ];
     }
 }

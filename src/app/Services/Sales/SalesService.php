@@ -258,8 +258,7 @@ class SalesService extends BaseAggregateService
                     'items.details.menu.plateColor',
                 ])
                 ->where('outlet_id', $outletId)
-                ->whereDate('date', $date) 
-                ->whereNotNull('submitted_at') 
+                ->whereDate('date', $date)  
                 ->where('status', 'submitted') 
                 ->first();
 

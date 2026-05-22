@@ -109,8 +109,7 @@ Route::prefix('closing-reports')->group(function () {
     Route::post('/draft', [ClosingReportController::class, 'storeDraft']);
     Route::post('/submit', [ClosingReportController::class, 'submit']);
     Route::post('/upload-photos', [ClosingReportController::class, 'uploadWastePhotos']);
-    Route::get('/{id}', [ClosingReportController::class, 'show']);
-    Route::put('/{id}', [ClosingReportController::class, 'updateDraft']);
+    Route::get('/{id}', [ClosingReportController::class, 'show']); 
     Route::delete('/{id}', [ClosingReportController::class, 'destroy']);
 });
 

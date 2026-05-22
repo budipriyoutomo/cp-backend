@@ -253,8 +253,7 @@ class SalesService extends BaseAggregateService
         $salesHeader = SalesHeader::query()
                 ->with([
                     'outlet',
-                    'items.platecolor',
-                    'items.details.menu.category',
+                    'items.platecolor', 
                     'items.details.menu.plateColor',
                 ])
                 ->where('outlet_id', $outletId)

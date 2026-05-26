@@ -9,6 +9,7 @@ use App\Http\Controllers\POSController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\WasteController;
 use App\Http\Controllers\ClosingReportController;
+use App\Http\Controllers\ReportsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -94,6 +95,7 @@ Route::prefix('reports')->group(function () {
     
     Route::get('/pos-data', [POSController::class, 'getposData']);
     Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
+    Route::get('/daily-summary', [ReportsController::class, 'dailySummary']);
 });
 
 Route::prefix('sales')->group(function () {

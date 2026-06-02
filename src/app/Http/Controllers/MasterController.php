@@ -66,7 +66,9 @@ class MasterController extends BaseApiController
 
     public function menuindex(Request $request)
     {  
-
+        $request->merge([
+            'is_active' => 1
+        ]);
        return $this->resource(
             MenuResource::collection($this->service->menu->all($request))
         ); 

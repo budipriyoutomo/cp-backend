@@ -13,7 +13,7 @@ class MenuService extends BaseService
 {
     protected string $model = Menu::class;
     protected array $relations = ['plateColor'];
-    protected array $searchable = ['menuname', 'description'];
+    protected array $searchable = ['menuname', 'description', 'is_active'];
     protected array $sortable = ['menuname', 'price', 'created_at'];
     
 

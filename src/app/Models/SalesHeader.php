@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, SalesItem> $items
+ */
 class SalesHeader extends BaseModel
 {
     protected $table = 'sales_headers';
@@ -30,5 +33,10 @@ class SalesHeader extends BaseModel
     public function outlet()
     {
         return $this->belongsTo(Outlet::class, 'outlet_id');
+    }
+
+    public function closingReport()
+    {
+        return $this->hasOne(ClosingReport::class,'sales_id');
     }
 }

@@ -11,6 +11,7 @@ class ClosingReport extends BaseModel
 
     protected $fillable = [
         'outlet_id',
+        'sales_id',
         'date',
         'status',
         'kitchen_leader',
@@ -30,6 +31,11 @@ class ClosingReport extends BaseModel
     public function outlet(): BelongsTo
     {
         return $this->belongsTo(Outlet::class, 'outlet_id');
+    }
+
+    public function sales(): BelongsTo
+    {
+        return $this->belongsTo(SalesHeader::class, 'sales_id');
     }
 
     public function entries(): HasMany

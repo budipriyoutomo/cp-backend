@@ -107,8 +107,7 @@ Route::prefix('sales')->group(function () {
 
 Route::prefix('closing-reports')->group(function () {
     Route::get('/', [ClosingReportController::class, 'index']);
-    Route::get('/data', [ClosingReportController::class, 'data']);
-    Route::post('/draft', [ClosingReportController::class, 'storeDraft']);
+    Route::get('/data', [ClosingReportController::class, 'data']); 
     Route::post('/submit', [ClosingReportController::class, 'submit']);
     Route::post('/upload-photos', [ClosingReportController::class, 'uploadWastePhotos']);
     Route::get('/{id}', [ClosingReportController::class, 'show']); 

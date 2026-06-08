@@ -3,6 +3,7 @@
 namespace App\Http\Resources\ClosingReport;
 
 use App\Http\Resources\BaseResource;
+use App\Http\Resources\Sales\SalesClosingReportResource;
 
 class ClosingReportResource extends BaseResource
 {
@@ -22,11 +23,18 @@ class ClosingReportResource extends BaseResource
         $totalCompensationValue = (float) $entriesCollection->sum(function ($entry) {
             return (int) $entry->compensation * (float) ($entry->plateColor?->price ?? 0);
         });
+        $menuEntries = [];
+
+        if ($this->relationLoaded('sales') && $this->sales) {
+            $salesReport = (new SalesClosingReportResource($this->sales))->resolve($request);
+            $menuEntries = $salesReport['entries'] ?? [];
+        }
 
         return [
             'id' => $this->id,
             'outletId' => $this->outlet_id,
             'outletName' => $this->outlet?->name,
+            'saleId' => $this->sales_id, 
             'date' => optional($this->date)->format('Y-m-d'),
             'status' => $this->status,
             'totalProduced' => $totalProduced,
@@ -42,6 +50,7 @@ class ClosingReportResource extends BaseResource
             'wastePhotoUrls' => $this->waste_photo_urls ?? [],
             'notes' => $this->notes,
             'entries' => ClosingReportEntryResource::collection($entries),
+            'menuEntries' => $menuEntries,
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),
             'submittedAt' => $this->submitted_at?->toDateTimeString(),

@@ -4,9 +4,8 @@ namespace App\Services\ClosingReport;
 
 use App\Models\ClosingReport;
 use App\Models\ClosingReportEntry;
-use App\Models\PlateColors;
-use App\Models\POSData;
-use App\Models\ProductionItem;
+use App\Models\SalesHeader;
+use App\Models\SalesItem;
 use App\Services\BaseService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -19,6 +18,9 @@ class ClosingReportService extends BaseService
 
     protected array $relations = [
         'outlet',
+        'sales.outlet',
+        'sales.items.plateColor',
+        'sales.items.details.menu.plateColor',
         'entries.plateColor',
     ];
 
@@ -52,72 +54,105 @@ class ClosingReportService extends BaseService
         return ClosingReport::with($this->relations)->findOrFail($id);
     }
 
-    public function getData(string $outletId, string $date): ClosingReport
-    {
-        return DB::transaction(function () use ($outletId, $date) {
+    public function getData(
+        string $outletId,
+        string $date
+    ): ClosingReport {
+
+        return DB::transaction(function () use (
+            $outletId,
+            $date
+        ) {
+            $salesHeader = SalesHeader::where(
+                                'outlet_id',
+                                $outletId
+                            )
+                            ->whereDate(
+                                'date',
+                                Carbon::parse($date)->toDateString()
+                            )
+                            ->firstOrFail();
+
+            if ($salesHeader->status !== 'submitted') {
+                throw new \Exception(
+                    'Sales Input harus disubmit terlebih dahulu.'
+                );
+            }
+            
+
             $report = ClosingReport::firstOrCreate(
                 [
                     'outlet_id' => $outletId,
                     'date' => Carbon::parse($date)->toDateString(),
                 ],
                 [
+                    'sales_id' => $salesHeader->id,
                     'status' => 'draft',
                 ]
             );
 
-            if ($report->status === 'draft') {
-                $this->syncEntriesFromOperationalData($report);
-            }
-
-            return $this->show($report->id);
-        });
-    }
-
-    public function saveDraft(array $data, ?string $id = null): ClosingReport
-    {
-        return DB::transaction(function () use ($data, $id) {
-            $report = $id
-                ? ClosingReport::findOrFail($id)
-                : ClosingReport::firstOrNew([
-                    'outlet_id' => $data['outletId'],
-                    'date' => Carbon::parse($data['date'])->toDateString(),
+            if (!$report->sales_id) {
+                $report->update([
+                    'sales_id' => $salesHeader->id,
                 ]);
+            }
 
             if ($report->status === 'submitted') {
-                throw new \Exception('Submitted closing report cannot be edited.');
+                return $this->show($report->id);
             }
 
-            $report->fill([
-                'outlet_id' => $data['outletId'] ?? $report->outlet_id,
-                'date' => isset($data['date']) ? Carbon::parse($data['date'])->toDateString() : $report->date,
-                'status' => 'draft',
-                'kitchen_leader' => $data['kitchenLeader'] ?? $report->kitchen_leader,
-                'operation_leader' => $data['operationLeader'] ?? $report->operation_leader,
-                'notes' => $data['notes'] ?? $report->notes,
-            ]);
-            $report->save();
-
-            $this->syncEntriesFromPayload($report, $data['entries'] ?? []);
+            if (! $report->entries()->exists()) {
+                $this->generateEntries($report);
+            }
 
             return $this->show($report->id);
         });
     }
+ 
 
     public function submit(array $data): ClosingReport
     {
         return DB::transaction(function () use ($data) {
+
+            $salesHeader = SalesHeader::with('items')
+                ->where('outlet_id', $data['outletId'])
+                ->whereDate(
+                    'date',
+                    Carbon::parse($data['date'])->toDateString()
+                )
+                ->firstOrFail();
+
+            if ($salesHeader->status !== 'submitted') {
+                throw new \Exception(
+                    'Sales Input harus disubmit terlebih dahulu.'
+                );
+            }
+
             $report = ClosingReport::firstOrCreate(
                 [
                     'outlet_id' => $data['outletId'],
                     'date' => Carbon::parse($data['date'])->toDateString(),
                 ],
                 [
+                    'sales_id' => $salesHeader->id,
                     'status' => 'draft',
                 ]
             );
 
-            if ($report->entries()->count() === 0) {
-                $this->syncEntriesFromOperationalData($report);
+            if (!$report->sales_id) {
+                $report->update([
+                    'sales_id' => $salesHeader->id,
+                ]);
+            }
+
+            if ($report->status === 'submitted') {
+                throw new \Exception(
+                    'Closing report already submitted.'
+                );
+            }
+
+            if (! $report->entries()->exists()) {
+                $this->generateEntries($report);
             }
 
             $report->update([
@@ -125,7 +160,7 @@ class ClosingReportService extends BaseService
                 'kitchen_leader' => $data['kitchenLeader'],
                 'operation_leader' => $data['operationLeader'],
                 'waste_photo_urls' => $data['wastePhotoUrls'] ?? [],
-                'notes' => $data['notes'] ?? $report->notes,
+                'notes' => $data['notes'] ?? null,
                 'submitted_at' => now(),
                 'submitted_by' => auth()->id(),
             ]);
@@ -133,6 +168,7 @@ class ClosingReportService extends BaseService
             return $this->show($report->id);
         });
     }
+
 
     public function delete($id): ?ClosingReport
     {
@@ -146,101 +182,61 @@ class ClosingReportService extends BaseService
 
         return $report;
     }
+  
+    private function buildOperationalEntries(
+        ClosingReport $report
+    ): array {
+        
+        $salesHeader = SalesHeader::with('items')
+            ->findOrFail($report->sales_id);
 
-    private function syncEntriesFromOperationalData(ClosingReport $report): void
-    {
-        $entries = $this->buildOperationalEntries($report->outlet_id, $report->date);
+            if ($salesHeader->status !== 'submitted') {
+                throw new \Exception(
+                    'Sales Input harus disubmit terlebih dahulu.'
+                );
+            }
 
-        $this->syncEntriesFromPayload($report, $entries);
+        return collect($salesHeader->items)
+            ->map(function (SalesItem $item) {
+                return [
+                    'plateColorId' => $item->plate_color_id,
+                    'produced' => $item->production_sold + $item->production_waste,
+                    'sold' => $item->production_sold,
+                    'waste' => $item->production_waste,
+                    'posSold' => $item->pos_sold,
+                    'adjustment' => $item->adjustment,
+                    'compensation' => $item->compensation,
+                    'selisih' => $item->selisih,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
-    private function syncEntriesFromPayload(ClosingReport $report, array $payloadEntries): void
-    {
-        $operationalEntries = collect(
-            $this->buildOperationalEntries($report->outlet_id, $report->date)
-        )->keyBy('plateColorId');
+    private function generateEntries(
+        ClosingReport $report
+    ): void {
 
-        foreach ($payloadEntries as $payloadEntry) {
-            $plateColorId = $payloadEntry['plateColorId'];
-            $base = $operationalEntries->get($plateColorId, [
-                'plateColorId' => $plateColorId,
-                'produced' => 0,
-                'sold' => 0,
-                'waste' => 0,
-                'posSold' => 0,
-            ]);
+        $entries = $this->buildOperationalEntries($report);
 
-            $posSold = (int) ($payloadEntry['posSold'] ?? $base['posSold']);
-            $adjustment = (int) ($payloadEntry['adjustment'] ?? 0);
-            $compensation = (int) ($payloadEntry['compensation'] ?? 0);
-            $sold = (int) $base['sold'];
+        foreach ($entries as $entry) {
 
             ClosingReportEntry::updateOrCreate(
                 [
                     'closing_report_id' => $report->id,
-                    'plate_color_id' => $plateColorId,
+                    'plate_color_id' => $entry['plateColorId'],
                 ],
                 [
-                    'produced' => (int) $base['produced'],
-                    'sold' => $sold,
-                    'waste' => (int) $base['waste'],
-                    'pos_sold' => $posSold,
-                    'adjustment' => $adjustment,
-                    'compensation' => $compensation,
-                    'compensation_reason' => $payloadEntry['compensationReason'] ?? null,
-                    'selisih' => $posSold - ($sold + $adjustment + $compensation),
+                    'produced' => $entry['produced'],
+                    'sold' => $entry['sold'],
+                    'waste' => $entry['waste'],
+                    'pos_sold' => $entry['posSold'],
+                    'adjustment' => $entry['adjustment'],
+                    'compensation' => $entry['compensation'],
+                    'selisih' => $entry['selisih'],
                 ]
             );
         }
     }
 
-    private function buildOperationalEntries(string $outletId, $date): array
-    {
-        $date = Carbon::parse($date)->toDateString();
-
-        $produced = ProductionItem::where('outlet_id', $outletId)
-            ->whereDate('produced_at', $date)
-            ->selectRaw('plate_color, SUM(quantity) as total')
-            ->groupBy('plate_color')
-            ->pluck('total', 'plate_color');
-
-        $sold = ProductionItem::where('outlet_id', $outletId)
-            ->whereDate('sold_at', $date)
-            ->selectRaw('plate_color, SUM(quantity) as total')
-            ->groupBy('plate_color')
-            ->pluck('total', 'plate_color');
-
-        $waste = ProductionItem::where('outlet_id', $outletId)
-            ->whereDate('wasted_at', $date)
-            ->selectRaw('plate_color, SUM(quantity) as total')
-            ->groupBy('plate_color')
-            ->pluck('total', 'plate_color');
-
-        $posSold = POSData::where('outlet_id', $outletId)
-            ->whereDate('date', $date)
-            ->selectRaw('plate_color_id, SUM(sold) as total')
-            ->groupBy('plate_color_id')
-            ->pluck('total', 'plate_color_id');
-
-        return PlateColors::where('is_active', true)
-            ->orderBy('price')
-            ->get()
-            ->map(function (PlateColors $plateColor) use ($produced, $sold, $waste, $posSold) {
-                $plateColorId = $plateColor->id;
-                $pos = (int) ($posSold[$plateColorId] ?? 0);
-                $productionSold = (int) ($sold[$plateColorId] ?? 0);
-
-                return [
-                    'plateColorId' => $plateColorId,
-                    'produced' => (int) ($produced[$plateColorId] ?? 0),
-                    'sold' => $productionSold,
-                    'waste' => (int) ($waste[$plateColorId] ?? 0),
-                    'posSold' => $pos,
-                    'adjustment' => 0,
-                    'compensation' => 0,
-                    'selisih' => $pos - $productionSold,
-                ];
-            })
-            ->all();
-    }
 }

@@ -49,27 +49,6 @@ class ClosingReportController extends BaseApiController
         );
     }
 
-    public function storeDraft(StoreClosingReportRequest $request)
-    {
-        $report = $this->service->saveDraft($request->validated());
-
-        return $this->resource(
-            new ClosingReportResource($report),
-            'Draft saved',
-            201
-        );
-    }
-
-    public function updateDraft(string $id, StoreClosingReportRequest $request)
-    {
-        $report = $this->service->saveDraft($request->validated(), $id);
-
-        return $this->resource(
-            new ClosingReportResource($report),
-            'Draft updated'
-        );
-    }
-
     public function submit(SubmitClosingReportRequest $request)
     {
         $report = $this->service->submit($request->validated());

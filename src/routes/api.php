@@ -10,6 +10,7 @@ use App\Http\Controllers\SalesController;
 use App\Http\Controllers\WasteController;
 use App\Http\Controllers\ClosingReportController;
 use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -62,6 +63,18 @@ Route::prefix('master')
     });
 
 // ======================================================
+// USER MANAGEMENT ROUTES (admin only)
+// ======================================================
+Route::prefix('users')
+    ->middleware(['auth:api', 'role:admin'])
+    ->group(function () {
+        Route::get('/', [UserController::class, 'index']);
+        Route::post('/', [UserController::class, 'store']);
+        Route::put('/{id}', [UserController::class, 'update']);
+        Route::delete('/{id}', [UserController::class, 'destroy']);
+    });
+
+// ======================================================
 // PRODUCTION ROUTES
 // ======================================================
 
@@ -96,13 +109,16 @@ Route::prefix('reports')->group(function () {
     Route::get('/pos-data', [POSController::class, 'getposData']);
     Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
     Route::get('/daily-summary', [ReportsController::class, 'dailySummary']);
+    Route::get('/waste-analysis', [ReportsController::class, 'wasteAnalysis']);
 });
 
 Route::prefix('sales')->group(function () {
     Route::get('/', [SalesController::class, 'drafts']);
     Route::post('/', [SalesController::class, 'store']);
-    Route::get('/{id}', [SalesController::class, 'show']);
+    // NOTE: static routes must be declared before the /{id} wildcard, otherwise
+    // /sales/by-date is captured by show() with id = "by-date".
     Route::get('/by-date', [SalesController::class, 'byDate']);
+    Route::get('/{id}', [SalesController::class, 'show']);
 });
 
 Route::prefix('closing-reports')->group(function () {

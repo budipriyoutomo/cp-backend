@@ -8,6 +8,7 @@ namespace App\Http\Controllers;
 
     use App\Services\POSService;
     use App\Services\Production\ProductionItemService;
+    use App\Exceptions\BusinessRuleException;
 
 
 
@@ -25,7 +26,25 @@ namespace App\Http\Controllers;
         */
 
         public function getposData(Request $request)
-        { 
+        {
+            // 🧹 Bereskan plate sisa hari sebelumnya yang belum diselesaikan.
+            // Otomatis menjadi waste, diatribusikan ke hari produksinya.
+            $this->productionItemService->autoWasteCarryOver($request->outletId);
+
+            // 🚧 Blokir jika masih ada plate pada tanggal ini yang belum
+            // ditandai sold/waste — data POS tidak bisa direkonsiliasi.
+            $pending = $this->productionItemService->countUnresolved(
+                $request->outletId,
+                $request->date
+            );
+
+            if ($pending > 0) {
+                throw new BusinessRuleException(
+                    "Masih ada {$pending} plate yang belum ditandai sold/waste untuk tanggal ini. "
+                    . 'Selesaikan dulu semua plate di Conveyor sebelum mengambil data POS.'
+                );
+            }
+
             $dataPOS = $this->service->getPosDataForClosing(
                 $request->outletId,
                 $request->date

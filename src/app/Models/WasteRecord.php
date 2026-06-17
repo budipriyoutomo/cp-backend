@@ -7,6 +7,7 @@ class WasteRecord extends BaseModel
     protected $table = 'waste_records';
     
     protected $fillable = [
+        'production_item_id',
         'menu_id',
         'outlet_id',
         'plate_color',
@@ -26,6 +27,11 @@ class WasteRecord extends BaseModel
     | RELATION
     |--------------------------------------------------------------------------
     */
+
+    public function productionItem()
+    {
+        return $this->belongsTo(ProductionItem::class, 'production_item_id');
+    }
 
     public function menu()
     {

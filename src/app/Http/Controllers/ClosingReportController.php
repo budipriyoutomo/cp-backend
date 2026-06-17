@@ -11,6 +11,7 @@ use App\Services\ClosingReport\ClosingReportService;
 use App\Services\Sales\SalesService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ClosingReportController extends BaseApiController
 {
@@ -63,9 +64,16 @@ class ClosingReportController extends BaseApiController
     {
         $urls = collect($request->file('photos', []))
             ->map(function ($file) {
-                $path = $file->store('closing-report/waste-photos', 'public');
+                $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
 
-                return Storage::disk('public')->url($path);
+                Storage::disk('s3')->putFileAs(
+                    'closing-report/waste-photos',
+                    $file,
+                    $filename,
+                    'public'
+                );
+
+                return Storage::disk('s3')->url('closing-report/waste-photos/' . $filename);
             })
             ->values()
             ->all();

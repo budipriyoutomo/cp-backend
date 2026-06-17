@@ -4,9 +4,11 @@ namespace App\Services\Production;
 
 use App\Models\ProductionItem;
 use App\Models\Menu;
+use App\Models\WasteRecord;
+use App\Exceptions\BusinessRuleException;
 use App\Services\BaseService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log; 
+use Illuminate\Support\Facades\Log;
 
 class ProductionItemService extends BaseService
 {
@@ -79,7 +81,8 @@ class ProductionItemService extends BaseService
 
         return $this->query()
             ->where('outlet_id', $outletId)
-            ->whereNull('final_status')  
+            ->whereNull('final_status')
+            ->whereDate('produced_at', today())
             ->whereIn('belt_status', ['fresh', 'warning'])
             ->orderBy('expires_at')
             ->get();
@@ -96,7 +99,7 @@ class ProductionItemService extends BaseService
             ->where('outlet_id', $outletId)
             ->whereNull('final_status')
             ->where('belt_status', 'expired')
-            ->whereDate('expires_at', now()->toDateString())
+            ->whereDate('produced_at', today())
             ->orderBy('expires_at')
             ->get();
     }
@@ -120,9 +123,17 @@ class ProductionItemService extends BaseService
                 'reason' => 'Not found / already processed / invalid status'
             ]);
 
-            return null;  
+            return null;
         }
-        
+
+        // 🔒 Plate hanya boleh difinalisasi pada hari produksinya.
+        if (!$item->produced_at || !$item->produced_at->isToday()) {
+            throw new BusinessRuleException(
+                'Plate dari hari sebelumnya tidak dapat ditandai sold/waste. '
+                . 'Item sisa otomatis menjadi waste saat pergantian hari.'
+            );
+        }
+
         $updateData = [
             'final_status' => $data['status'],
             'notes'        => $data['notes'],
@@ -149,8 +160,12 @@ class ProductionItemService extends BaseService
     */
     public function markSold(array $ids)
     {
+        $this->assertWithinProductionDay($ids);
+
         return $this->query()
             ->whereIn('id', $ids)
+            ->whereNull('final_status')
+            ->whereDate('produced_at', today())
             ->update([
                 'final_status' => 'sold',
                 'sold_at' => now(),
@@ -158,12 +173,107 @@ class ProductionItemService extends BaseService
     }
     public function markWaste(array $ids)
     {
+        $this->assertWithinProductionDay($ids);
+
         return $this->query()
             ->whereIn('id', $ids)
+            ->whereNull('final_status')
+            ->whereDate('produced_at', today())
             ->update([
                 'final_status' => 'waste',
                 'wasted_at' => now(),
             ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | BUSINESS-DAY GUARD
+    |--------------------------------------------------------------------------
+    | Plate hanya boleh ditandai sold/waste pada hari produksinya (produced_at).
+    | Mencegah data kemarin ter-update menjadi sold/waste hari ini.
+    */
+    private function assertWithinProductionDay(array $ids): void
+    {
+        if (empty($ids)) {
+            return;
+        }
+
+        $stale = ProductionItem::whereIn('id', $ids)
+            ->whereDate('produced_at', '!=', today()->toDateString())
+            ->count();
+
+        if ($stale > 0) {
+            throw new BusinessRuleException(
+                "Tidak bisa menandai {$stale} plate dari hari sebelumnya. "
+                . 'Plate hanya dapat ditandai sold/waste pada hari produksinya.'
+            );
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | UNRESOLVED COUNT (gate untuk Get Data POS)
+    |--------------------------------------------------------------------------
+    | Jumlah plate pada tanggal tertentu yang belum ditandai sold/waste.
+    */
+    public function countUnresolved(string $outletId, string $date): int
+    {
+        $date = \Carbon\Carbon::parse($date)->toDateString();
+
+        return ProductionItem::where('outlet_id', $outletId)
+            ->whereNull('final_status')
+            ->whereDate('produced_at', $date)
+            ->count();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUTO-WASTE CARRY-OVER (saat pergantian hari)
+    |--------------------------------------------------------------------------
+    | Plate hari-hari sebelumnya yang belum diselesaikan (final_status NULL)
+    | otomatis menjadi waste, diatribusikan ke hari produksinya — bukan hari ini.
+    */
+    public function autoWasteCarryOver(?string $outletId = null): int
+    {
+        $query = ProductionItem::query()
+            ->whereNull('final_status')
+            ->whereDate('produced_at', '<', today());
+
+        if ($outletId) {
+            $query->where('outlet_id', $outletId);
+        }
+
+        $items = $query->get();
+
+        if ($items->isEmpty()) {
+            return 0;
+        }
+
+        return DB::transaction(function () use ($items) {
+            $reason = 'Auto-waste: plate tidak diselesaikan pada hari produksi';
+
+            foreach ($items as $item) {
+                $item->update([
+                    'final_status' => 'waste',
+                    'belt_status'  => 'expired',
+                    // 🔑 atribusi ke hari produksi, bukan now()
+                    'wasted_at'    => $item->produced_at,
+                    'notes'        => $item->notes ?: $reason,
+                ]);
+
+                WasteRecord::create([
+                    'production_item_id' => $item->id,
+                    'menu_id'            => $item->menu_id,
+                    'plate_color'        => $item->plate_color,
+                    'quantity'           => $item->quantity ?? 1,
+                    'reason'             => $reason,
+                    'recorded_at'        => $item->produced_at,
+                    'outlet_id'          => $item->outlet_id,
+                ]);
+            }
+
+            return $items->count();
+        });
     }
     /*
     |--------------------------------------------------------------------------
@@ -174,7 +284,7 @@ class ProductionItemService extends BaseService
     {
         return $this->query()
             ->whereIn('id', $ids)
-            ->update(['status' => 'expired']);
+            ->update(['belt_status' => 'expired']);
     }
         
     public function getSoldItem($outletId, $date)

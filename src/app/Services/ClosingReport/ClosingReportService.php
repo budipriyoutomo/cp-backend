@@ -2,6 +2,7 @@
 
 namespace App\Services\ClosingReport;
 
+use App\Exceptions\BusinessRuleException;
 use App\Models\ClosingReport;
 use App\Models\ClosingReportEntry;
 use App\Models\SalesHeader;
@@ -74,7 +75,7 @@ class ClosingReportService extends BaseService
                             ->firstOrFail();
 
             if ($salesHeader->status !== 'submitted') {
-                throw new \Exception(
+                throw new BusinessRuleException(
                     'Sales Input harus disubmit terlebih dahulu.'
                 );
             }
@@ -123,7 +124,7 @@ class ClosingReportService extends BaseService
                 ->firstOrFail();
 
             if ($salesHeader->status !== 'submitted') {
-                throw new \Exception(
+                throw new BusinessRuleException(
                     'Sales Input harus disubmit terlebih dahulu.'
                 );
             }
@@ -146,8 +147,9 @@ class ClosingReportService extends BaseService
             }
 
             if ($report->status === 'submitted') {
-                throw new \Exception(
-                    'Closing report already submitted.'
+                throw new BusinessRuleException(
+                    'Closing report already submitted.',
+                    409
                 );
             }
 
@@ -175,7 +177,7 @@ class ClosingReportService extends BaseService
         $report = ClosingReport::findOrFail($id);
 
         if ($report->status !== 'draft') {
-            throw new \Exception('Only draft closing reports can be deleted.');
+            throw new BusinessRuleException('Only draft closing reports can be deleted.', 409);
         }
 
         $report->delete();
@@ -191,7 +193,7 @@ class ClosingReportService extends BaseService
             ->findOrFail($report->sales_id);
 
             if ($salesHeader->status !== 'submitted') {
-                throw new \Exception(
+                throw new BusinessRuleException(
                     'Sales Input harus disubmit terlebih dahulu.'
                 );
             }

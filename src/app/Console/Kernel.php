@@ -12,7 +12,10 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Tutup plate sisa hari sebelumnya tepat setelah pergantian hari.
+        $schedule->command('production:close-stale')
+            ->dailyAt('00:05')
+            ->withoutOverlapping();
     }
 
     /**

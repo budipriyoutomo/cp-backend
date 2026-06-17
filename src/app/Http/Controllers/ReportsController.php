@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\Reports\DailySummaryRequest; 
+use App\Http\Requests\Reports\DailySummaryRequest;
+use App\Http\Requests\Reports\WasteAnalysisRequest;
 use App\Http\Resources\Reports\DailySummaryResource;
 
 use App\Services\ReportsService;
@@ -29,5 +30,20 @@ class ReportsController extends BaseApiController
             new DailySummaryResource($data)
         );
     }
- 
+
+    /*
+    |--------------------------------------------------------------------------
+    | WASTE ANALYSIS
+    |--------------------------------------------------------------------------
+    */
+    public function wasteAnalysis(WasteAnalysisRequest $request)
+    {
+        $data = $this->service->wasteAnalysis->get(
+            $request->outletId,
+            $request->startDate,
+            $request->endDate
+        );
+
+        return $this->success($data);
+    }
 }

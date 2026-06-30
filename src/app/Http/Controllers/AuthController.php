@@ -90,15 +90,15 @@ class AuthController extends Controller
 
     public function refresh()
     {
-        return $this->respondWithToken(JWTAuth::refresh());
-    }
+        $token = JWTAuth::refresh();
 
-    protected function respondWithToken($token)
-    {
         return response()->json([
-            'access_token' => $token,
-            'token_type' => 'bearer',
-            'expires_in' => JWTAuth::factory()->getTTL() * 60
+            'success' => true,
+            'message' => 'Token refreshed',
+            'data' => [
+                'token' => $token,
+                'expires_in' => JWTAuth::factory()->getTTL() * 60,
+            ]
         ]);
     }
 

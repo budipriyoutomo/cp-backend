@@ -54,6 +54,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=internal_net"
       - "traefik.http.routers.api.rule=Host(`api.maharasa.calira.my.id`)"
+      - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=myresolver"
       - "traefik.http.services.api.loadbalancer.server.port=80"

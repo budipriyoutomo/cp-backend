@@ -4,13 +4,23 @@ namespace Tests\Feature\Idempotency;
 
 use App\Models\SalesHeader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesUsers;
 use Tests\Concerns\SeedsProductionData;
 use Tests\TestCase;
 
 class IdempotencyTest extends TestCase
 {
     use RefreshDatabase;
+    use CreatesUsers;
     use SeedsProductionData;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Every route exercised here now sits behind auth:api.
+        $this->actingAsRole('admin');
+    }
 
     private function payload(): array
     {
@@ -45,14 +55,26 @@ class IdempotencyTest extends TestCase
         $this->assertDatabaseCount('processed_requests', 1);
     }
 
-    public function test_different_request_id_creates_a_new_record(): void
+    public function test_different_request_id_executes_again_instead_of_replaying(): void
     {
         $payload = $this->payload();
 
-        $this->withHeaders(['X-Client-Request-Id' => 'req-1'])->postJson('/api/sales', $payload)->assertStatus(201);
-        $this->withHeaders(['X-Client-Request-Id' => 'req-2'])->postJson('/api/sales', $payload)->assertStatus(201);
+        $this->withHeaders(['X-Client-Request-Id' => 'req-1'])
+            ->postJson('/api/sales', $payload)->assertStatus(201);
 
-        $this->assertDatabaseCount('sales_headers', 2);
+        $changed = $payload;
+        $changed['items'][0]['pos_sold'] = 99;
+
+        $this->withHeaders(['X-Client-Request-Id' => 'req-2'])
+            ->postJson('/api/sales', $changed)
+            ->assertStatus(201)
+            ->assertHeaderMissing('X-Idempotent-Replay');
+
+        // Sales headers are unique per (outlet, date), so "executed again" shows
+        // up as an updated row rather than a second one.
+        $this->assertDatabaseCount('sales_headers', 1);
+        $this->assertDatabaseHas('sales_items', ['pos_sold' => 99]);
+        $this->assertDatabaseCount('processed_requests', 2);
     }
 
     public function test_request_without_header_is_not_tracked(): void
@@ -60,10 +82,15 @@ class IdempotencyTest extends TestCase
         $payload = $this->payload();
 
         $this->postJson('/api/sales', $payload)->assertStatus(201);
-        $this->postJson('/api/sales', $payload)->assertStatus(201);
 
-        $this->assertDatabaseCount('sales_headers', 2);
+        $changed = $payload;
+        $changed['items'][0]['pos_sold'] = 77;
+
+        $this->postJson('/api/sales', $changed)->assertStatus(201);
+
+        // Nothing recorded, and the second call was executed rather than replayed.
         $this->assertDatabaseCount('processed_requests', 0);
+        $this->assertDatabaseHas('sales_items', ['pos_sold' => 77]);
     }
 
     public function test_validation_errors_are_not_cached(): void

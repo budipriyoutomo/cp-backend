@@ -4,15 +4,17 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Http\Requests\RegisterRequest;
-use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
 use App\Http\Resources\UserResource;
-use App\Http\Resources\LoginResource;
 
-class AuthController extends Controller
+/**
+ * Responses here go through BaseApiController like everywhere else, so the
+ * envelope is `{ status, message, data }`. It used to be a hand-written
+ * `{ success, ... }`, which made this the odd one out in the API.
+ */
+class AuthController extends BaseApiController
 {
     public function login(Request $request)
     {
@@ -24,23 +26,12 @@ class AuthController extends Controller
         $credentials = $request->only('email', 'password');
 
         if (! $token = JWTAuth::attempt($credentials)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 401);
+            return $this->error('Unauthorized', 401);
         }
 
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Login successful',
-            'data' => [
-                'user' => new UserResource($user),
-                'token' => $token,
-                'expires_in' => JWTAuth::factory()->getTTL() * 60,
-            ]
-        ]);
+        return $this->success($this->tokenPayload($user, $token), 'Login successful');
     }
 
     public function loginByPin(Request $request)
@@ -49,64 +40,46 @@ class AuthController extends Controller
             'pin' => 'required|string|min:6|max:10',
         ]);
 
-        $user = User::where('pin', $request->pin) 
-            ->first();
+        // Look up by blind index, then verify against the bcrypt hash. The
+        // second check matters: the lookup column alone would authenticate on
+        // an HMAC collision or on a stale value written outside the app.
+        $user = User::where('pin_lookup', User::pinLookup($request->pin))->first();
 
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'PIN tidak valid'
-            ], 401);
+        if (!$user || !$user->pin || !Hash::check($request->pin, $user->pin)) {
+            return $this->error('PIN tidak valid', 401);
         }
 
         $token = JWTAuth::fromUser($user);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Login successful',
-            'data' => [
-                'user' => new UserResource($user),
-                'token' => $token,
-                'expires_in' => JWTAuth::factory()->getTTL() * 60,
-            ]
-        ]);
+        return $this->success($this->tokenPayload($user, $token), 'Login successful');
     }
 
     public function me()
     {
-        $user = auth()->user();
-
-        return response()->json([
-            'success' => true,
-            'data' => new UserResource($user)
-        ]);
+        return $this->resource(new UserResource(auth()->user()));
     }
 
     public function logout()
     {
         auth()->logout();
-        return response()->json(['message' => 'Successfully logged out']);
+
+        return $this->success(null, 'Successfully logged out');
     }
 
     public function refresh()
     {
-        $token = JWTAuth::refresh();
+        // Through the guard, not JWTAuth::refresh(): the facade has no token
+        // bound to it here, while auth:api has already parsed the bearer token.
+        $token = auth('api')->refresh();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Token refreshed',
-            'data' => [
-                'token' => $token,
-                'expires_in' => JWTAuth::factory()->getTTL() * 60,
-            ]
-        ]);
+        return $this->success([
+            'token'      => $token,
+            'expires_in' => JWTAuth::factory()->getTTL() * 60,
+        ], 'Token refreshed');
     }
 
     public function register(RegisterRequest  $request)
     {
-
-        //$outlet = is_array($request->outlet) ? json_encode($request->outlet) : $request->outlet;
-
         $user = User::create([
             'name'       => $request->name,
             'email'      => $request->email,
@@ -119,13 +92,18 @@ class AuthController extends Controller
 
         $token = JWTAuth::fromUser($user);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'User registered successfully',
-            'data' => [
-                'user' => new UserResource($user),
-                'token' => $token,
-            ]
-        ], 201);
+        return $this->success([
+            'user'  => new UserResource($user),
+            'token' => $token,
+        ], 'User registered successfully', 201);
+    }
+
+    private function tokenPayload(User $user, string $token): array
+    {
+        return [
+            'user'       => new UserResource($user),
+            'token'      => $token,
+            'expires_in' => JWTAuth::factory()->getTTL() * 60,
+        ];
     }
 }

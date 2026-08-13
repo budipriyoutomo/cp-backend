@@ -3,13 +3,23 @@
 namespace Tests\Feature\Production;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesUsers;
 use Tests\Concerns\SeedsProductionData;
 use Tests\TestCase;
 
 class ProductionPlanTest extends TestCase
 {
     use RefreshDatabase;
+    use CreatesUsers;
     use SeedsProductionData;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Every route exercised here now sits behind auth:api.
+        $this->actingAsRole('admin');
+    }
 
     public function test_save_plan_persists_plan_and_items(): void
     {

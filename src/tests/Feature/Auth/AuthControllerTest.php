@@ -39,7 +39,7 @@ class AuthControllerTest extends TestCase
         ]);
 
         $response->assertCreated()
-            ->assertJsonPath('success', true)
+            ->assertJsonPath('status', true)
             ->assertJsonStructure(['data' => ['user' => ['id', 'name', 'role'], 'token']]);
 
         $this->assertDatabaseHas('users', ['email' => 'jane@example.com']);
@@ -51,7 +51,7 @@ class AuthControllerTest extends TestCase
         $response = $this->postJson('/api/register', []);
 
         $response->assertStatus(422)
-            ->assertJsonPath('success', false)
+            ->assertJsonPath('status', false)
             ->assertJsonValidationErrors(['name', 'email', 'password', 'role', 'departemen', 'outlet', 'module_app']);
     }
 
@@ -81,7 +81,7 @@ class AuthControllerTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('success', true)
+            ->assertJsonPath('status', true)
             ->assertJsonPath('message', 'Login successful')
             ->assertJsonStructure(['data' => ['user', 'token', 'expires_in']]);
     }
@@ -95,7 +95,7 @@ class AuthControllerTest extends TestCase
             'password' => 'wrong-password',
         ]);
 
-        $response->assertStatus(401)->assertJsonPath('success', false);
+        $response->assertStatus(401)->assertJsonPath('status', false);
     }
 
     public function test_login_validates_input(): void
@@ -112,7 +112,7 @@ class AuthControllerTest extends TestCase
         $response = $this->postJson('/api/login-pin', ['pin' => '999888']);
 
         $response->assertOk()
-            ->assertJsonPath('success', true)
+            ->assertJsonPath('status', true)
             ->assertJsonStructure(['data' => ['user', 'token', 'expires_in']]);
     }
 
@@ -123,7 +123,7 @@ class AuthControllerTest extends TestCase
         $response = $this->postJson('/api/login-pin', ['pin' => '000000']);
 
         $response->assertStatus(401)
-            ->assertJsonPath('success', false)
+            ->assertJsonPath('status', false)
             ->assertJsonPath('message', 'PIN tidak valid');
     }
 
@@ -134,7 +134,7 @@ class AuthControllerTest extends TestCase
         $response = $this->actingAs($user, 'api')->getJson('/api/auth/me');
 
         $response->assertOk()
-            ->assertJsonPath('success', true)
+            ->assertJsonPath('status', true)
             ->assertJsonPath('data.id', $user->id);
     }
 

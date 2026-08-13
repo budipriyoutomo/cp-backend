@@ -2,6 +2,7 @@
 
 namespace App\Services\Production;
 
+use App\Models\PlateColors;
 use App\Models\ProductionItem;
 use App\Models\WasteRecord;
 use Illuminate\Support\Facades\DB;
@@ -74,13 +75,21 @@ class WasteService
 
         $totalProduction = (int) $productionByPlateColor->sum();
 
-        $plateColors = $query
+        $wasteByColor = $query
             ->select(
                 'plate_color',
                 DB::raw('SUM(quantity) as waste_count')
             )
             ->groupBy('plate_color')
             ->get();
+
+        // waste_records.plate_color holds a plate color UUID, so the name has to
+        // come from the master table. Resolved in PHP rather than with a JOIN:
+        // plate_colors.id is uuid while plate_color is varchar, and PostgreSQL
+        // has no operator for that comparison. Same pattern as WasteAnalysisService.
+        $plateColorNames = PlateColors::query()
+            ->whereIn('id', $wasteByColor->pluck('plate_color')->filter()->all())
+            ->pluck('platename', 'id');
 
         return [
             'totalWaste' => $totalWaste,
@@ -91,14 +100,14 @@ class WasteService
                 ? round(($totalWaste / $totalProduction) * 100, 2)
                 : 0,
 
-            'byPlateColor' => $plateColors->map(function ($item) {
+            'byPlateColor' => $wasteByColor->map(function ($item) use ($plateColorNames, $productionByPlateColor) {
                 return [
                     'plateColorId' => $item->plate_color,
-                    'plateColorName' => ucfirst($item->plate_color),
+                    'plateColorName' => $plateColorNames[$item->plate_color] ?? 'Unknown',
                     'wasteCount' => (int) $item->waste_count,
                     'productionCount' => (int) ($productionByPlateColor[$item->plate_color] ?? 0),
                 ];
-            }),
+            })->values(),
         ];
     }
 

@@ -30,9 +30,18 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/login-pin', [AuthController::class, 'loginByPin']);
+// Tighter than the global 60/min: a 6-digit PIN is guessable, so brute force is
+// the realistic attack here. Not tighter than 20 though — the limit is keyed by
+// IP and a whole outlet of tablets shares one, so a shift change with a few
+// typos must not lock the kitchen out. 20/min still means ~18 days of sustained
+// guessing to cover half of a 6-digit keyspace.
+Route::post('/login-pin', [AuthController::class, 'loginByPin'])
+    ->middleware('throttle:20,1');
 Route::middleware('auth:api')->get('/auth/me', [AuthController::class, 'me']);
 Route::middleware('auth:api')->post('/logout', [AuthController::class, 'logout']);
+// The controller method, the frontend service call and the Idempotency
+// skip-list entry all existed; only this route line was missing.
+Route::middleware('auth:api')->post('/auth/refresh', [AuthController::class, 'refresh']);
 
 
 // ======================================================
@@ -78,7 +87,7 @@ Route::prefix('users')
 // PRODUCTION ROUTES
 // ======================================================
 
-Route::prefix('production')->group(function () {
+Route::prefix('production')->middleware('auth:api')->group(function () {
 
     Route::get('/stats', [ProductionController::class, 'stats']);
     Route::get('/plan', [ProductionController::class, 'plan']);
@@ -86,7 +95,6 @@ Route::prefix('production')->group(function () {
 
     Route::get('/conveyor', [ProductionController::class, 'conveyor']);
     Route::post('/produce', [ProductionController::class, 'produce']);
-    Route::post('/remove-expired', [ProductionController::class, 'removeExpired']);
     Route::post('/mark-sold', [ProductionController::class, 'markSold']);
     Route::post('/mark-waste', [ProductionController::class, 'markWaste']);
 
@@ -104,15 +112,15 @@ Route::prefix('production')->group(function () {
 // REPORT ROUTES
 // ======================================================
 
-Route::prefix('reports')->group(function () {
-    
+Route::prefix('reports')->middleware('auth:api')->group(function () {
+
     Route::get('/pos-data', [POSController::class, 'getposData']);
     Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
     Route::get('/daily-summary', [ReportsController::class, 'dailySummary']);
     Route::get('/waste-analysis', [ReportsController::class, 'wasteAnalysis']);
 });
 
-Route::prefix('sales')->group(function () {
+Route::prefix('sales')->middleware('auth:api')->group(function () {
     Route::get('/', [SalesController::class, 'drafts']);
     Route::post('/', [SalesController::class, 'store']);
     // NOTE: static routes must be declared before the /{id} wildcard, otherwise
@@ -121,16 +129,19 @@ Route::prefix('sales')->group(function () {
     Route::get('/{id}', [SalesController::class, 'show']);
 });
 
-Route::prefix('closing-reports')->group(function () {
+Route::prefix('closing-reports')->middleware('auth:api')->group(function () {
     Route::get('/', [ClosingReportController::class, 'index']);
-    Route::get('/data', [ClosingReportController::class, 'data']); 
+    Route::get('/data', [ClosingReportController::class, 'data']);
     Route::post('/submit', [ClosingReportController::class, 'submit']);
     Route::post('/upload-photos', [ClosingReportController::class, 'uploadWastePhotos']);
-    Route::get('/{id}', [ClosingReportController::class, 'show']); 
-    Route::delete('/{id}', [ClosingReportController::class, 'destroy']);
+    Route::get('/{id}', [ClosingReportController::class, 'show']);
+
+    // Deleting a signed-off report is the one destructive action in this group.
+    Route::delete('/{id}', [ClosingReportController::class, 'destroy'])
+        ->middleware('role:admin,manager');
 });
 
-Route::prefix('waste')->group(function () {
+Route::prefix('waste')->middleware('auth:api')->group(function () {
 
     Route::get('/', [WasteController::class, 'index']);
     Route::get('/summary', [WasteController::class, 'summary']);

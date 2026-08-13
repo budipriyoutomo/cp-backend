@@ -9,7 +9,6 @@ namespace App\Http\Controllers;
 
     use App\Http\Requests\Production\ProductionProduceRequest;
     use App\Http\Requests\Production\ProductionPlanRequest;
-    use App\Http\Requests\Production\ProductionRemoveExpiredRequest;
     use App\Http\Requests\Production\ProductionExpiredChangeRequest;
     use App\Http\Requests\Production\WasteRecordRequest;
     use App\Http\Requests\Production\WasteIndexRequest;
@@ -122,7 +121,7 @@ namespace App\Http\Controllers;
             ]);
 
             if ($request->status === 'waste') {
-                $this->service->waste->recordFromItems(
+                $this->service->wasteRecord->recordFromItems(
                     [$id],
                     $request->notes ?? 'Marked as waste from expired items'
                 );
@@ -132,18 +131,6 @@ namespace App\Http\Controllers;
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | REMOVE EXPIRED
-        |--------------------------------------------------------------------------
-        */
-        public function removeExpired(ProductionRemoveExpiredRequest $request)
-        {
-            $this->service->item->removeExpired($request->validated()['itemIds']);
-
-            return $this->success(null, 'Expired items removed');
-        }
-        
         /*
         |--------------------------------------------------------------------------
         | Mark as Sold
@@ -176,7 +163,7 @@ namespace App\Http\Controllers;
         */
         public function wasteStore(WasteRecordRequest $request)
         {
-            $waste = $this->service->waste->recordFromItems(
+            $waste = $this->service->wasteRecord->recordFromItems(
                 $request->getItemIds(),
                 $request->reason
             );  
@@ -193,7 +180,7 @@ namespace App\Http\Controllers;
         */
         public function wasteIndex(WasteIndexRequest $request)
         {
-            $data = $this->service->waste->getByDateRange(
+            $data = $this->service->wasteRecord->getByDateRange(
                 $request->outletId,
                 $request->startDate,
                 $request->endDate
@@ -219,10 +206,7 @@ namespace App\Http\Controllers;
             );
 
 
-            return response()->json([
-                'success' => true,
-                'data' => ProductionMenuResource::collection($data)
-            ]);
+            return $this->resource(ProductionMenuResource::collection($data));
         }
 
          /*
@@ -261,9 +245,6 @@ namespace App\Http\Controllers;
                 $request->date
             ); 
             
-            return response()->json([
-                'success' => true,
-                'data' => ProductionItemResource::collection($data)
-            ]);
+            return $this->resource(ProductionItemResource::collection($data));
         }
     }

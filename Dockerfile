@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# .dockerignore menahan src/.env, vendor/, dan cache milik mesin developer.
 COPY src/ .
 
 RUN composer install \
@@ -19,9 +20,12 @@ RUN composer install \
     --optimize-autoloader \
     --no-interaction
 
-RUN php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache
+# Sengaja TIDAK ada config:cache / route:cache / view:cache di sini.
+#
+# Tidak ada .env pada tahap ini, jadi cache yang dibuat sekarang akan berisi
+# nilai kosong — dan config yang di-cache mengalahkan environment variable saat
+# runtime, jadi kesalahannya akan diam. Ketiganya dipindah ke
+# docker/entrypoint.sh, yang jalan setelah env masuk.
 
 
 # =========================================
@@ -31,8 +35,10 @@ FROM php:8.2-fpm
 
 WORKDIR /var/www/html
 
+# `cron` sudah tidak dipasang: scheduler sekarang dijalankan supervisord lewat
+# `artisan schedule:work`. Lihat komentar di docker/supervisord.conf.
 RUN apt-get update && apt-get install -y \
-    nginx supervisor cron curl libpq-dev redis-tools \
+    nginx supervisor curl libpq-dev redis-tools \
     && docker-php-ext-install pdo pdo_pgsql pgsql opcache bcmath \
     && pecl install redis \
     && docker-php-ext-enable redis \
@@ -43,12 +49,23 @@ COPY --from=builder /var/www/html /var/www/html
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/default.conf /etc/nginx/conf.d/default.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY docker/laravel-cron /etc/cron.d/laravel-cron
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-RUN chown -R www-data:www-data \
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Isi direktori ini ditahan .dockerignore (cache mesin developer), tapi Laravel
+# tetap butuh direktorinya ada — view:cache di entrypoint gagal tanpa itu.
+RUN mkdir -p \
+    storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache \
+    && chown -R www-data:www-data \
     /var/www/html/storage \
     /var/www/html/bootstrap/cache
 
 EXPOSE 80
 
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/bin/supervisord"]

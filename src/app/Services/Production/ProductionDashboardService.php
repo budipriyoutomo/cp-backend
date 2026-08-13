@@ -17,11 +17,11 @@ class ProductionDashboardService
             ->get(['platename', 'id']);
 
         $targets = ProductionPlanItem::whereHas('plan', function ($q) use ($outletId, $today) {
+                // Carbon is mutable: the old whereBetween([$today->startOfDay(),
+                // $today->endOfDay()]) passed the same instance twice, so both
+                // bounds ended up at 23:59:59 and the target was always 0.
                 $q->where('outlet_id', $outletId)
-                ->whereBetween('date', [
-                    $today->startOfDay(),
-                    $today->endOfDay()
-                ]);
+                ->whereDate('date', $today);
             })
             ->selectRaw('plate_color, SUM(qty) as total')
             ->groupBy('plate_color')
@@ -49,9 +49,12 @@ class ProductionDashboardService
             ->groupBy('plate_color')
             ->pluck('total', 'plate_color');
             
+        // Attribute waste by wasted_at, mirroring how sold uses sold_at. Using
+        // expires_at drifted from the reports for carry-over plates, whose
+        // wasted_at is deliberately set back to their production day.
         $waste = ProductionItem::where('outlet_id', $outletId)
             ->where('final_status', 'waste')
-            ->whereDate('expires_at', $today)
+            ->whereDate('wasted_at', $today)
             ->selectRaw('plate_color, COUNT(*) as total')
             ->groupBy('plate_color')
             ->pluck('total', 'plate_color');

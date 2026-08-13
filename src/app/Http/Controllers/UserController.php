@@ -38,14 +38,13 @@ class UserController extends BaseApiController
             'email'      => ['required', 'email', 'max:255', 'unique:users,email'],
             'password'   => ['required', 'string', 'min:6'],
             'role'       => ['required', 'string', 'max:50'],
-            'pin'        => ['nullable', 'string', 'min:4', 'max:10', 'unique:users,pin'],
+            'pin'        => ['nullable', 'string', 'min:6', 'max:10', $this->uniquePinRule()],
             'departemen' => ['nullable', 'string', 'max:255'],
             'outlet'     => ['nullable', 'array'],
             'module_app' => ['nullable', 'array'],
         ]);
 
         $data['password'] = Hash::make($data['password']);
-
         $user = User::create($data);
 
         return $this->resource(
@@ -64,7 +63,7 @@ class UserController extends BaseApiController
             'email'      => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password'   => ['nullable', 'string', 'min:6'],
             'role'       => ['sometimes', 'string', 'max:50'],
-            'pin'        => ['nullable', 'string', 'min:4', 'max:10', Rule::unique('users', 'pin')->ignore($user->id)],
+            'pin'        => ['nullable', 'string', 'min:6', 'max:10', $this->uniquePinRule($user->id)],
             'departemen' => ['nullable', 'string', 'max:255'],
             'outlet'     => ['nullable', 'array'],
             'module_app' => ['nullable', 'array'],
@@ -83,6 +82,27 @@ class UserController extends BaseApiController
             new UserManagementResource($user),
             'User updated'
         );
+    }
+
+    /**
+     * PIN uniqueness is checked against the blind index: users.pin holds a
+     * bcrypt hash, so `unique:users,pin` could never match anything.
+     */
+    private function uniquePinRule(?int $ignoreUserId = null): callable
+    {
+        return function (string $attribute, $value, callable $fail) use ($ignoreUserId) {
+            if ($value === null || $value === '') {
+                return;
+            }
+
+            $taken = User::where('pin_lookup', User::pinLookup((string) $value))
+                ->when($ignoreUserId, fn ($q) => $q->where('id', '!=', $ignoreUserId))
+                ->exists();
+
+            if ($taken) {
+                $fail('The pin has already been taken.');
+            }
+        };
     }
 
     public function destroy($id)

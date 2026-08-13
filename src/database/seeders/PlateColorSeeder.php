@@ -23,10 +23,13 @@ class PlateColorSeeder extends Seeder
         ];
 
         foreach ($data as [$name, $price]) {
+            // NOTE: no 'id' here. It used to be in the update payload, so a
+            // second run tried to rewrite the primary key of an existing row
+            // and broke the foreign keys pointing at it. HasUuid assigns the id
+            // on create; on update the row keeps the one it already has.
             PlateColors::updateOrCreate(
                 ['platename' => $name],
                 [
-                    'id' => Str::uuid(),
                     'price' => $price,
                     'description' => $name . ' plate',
                     'target_foodcost' => 0,

@@ -63,29 +63,28 @@ class ProductionItemService extends BaseService
     | GET CONVEYOR
     |--------------------------------------------------------------------------
     */
+    /**
+     * Read-only. `expires_at` is the source of truth, so the belt state is
+     * filtered and rendered from it rather than from the stored `belt_status`.
+     *
+     * This used to run two mass UPDATEs before every read — and the kitchen
+     * polls it every 30 seconds per tablet, so a GET was writing the whole
+     * outlet's rows several times a minute. The stored column is now kept fresh
+     * by `production:refresh-belt-status` instead; see Console\Kernel.
+     */
     public function conveyor(string $outletId)
     {
-         
-        DB::table('production_items')
-            ->where('outlet_id', $outletId)
-            ->whereNull('final_status')
-            ->where('expires_at', '<=', now())
-            ->update(['belt_status' => 'expired']);
- 
-        DB::table('production_items')
-            ->where('outlet_id', $outletId)
-            ->whereNull('final_status')
-            ->where('expires_at', '<=', now()->addMinutes(15))
-            ->where('expires_at', '>', now())
-            ->update(['belt_status' => 'warning']);
-
-        return $this->query()
+        $items = $this->query()
             ->where('outlet_id', $outletId)
             ->whereNull('final_status')
             ->whereDate('produced_at', today())
-            ->whereIn('belt_status', ['fresh', 'warning'])
+            ->where('expires_at', '>', now())
             ->orderBy('expires_at')
             ->get();
+
+        // Refresh the in-memory value only, so the response is accurate to the
+        // second regardless of when the scheduler last ran. Nothing is saved.
+        return $items->each->updateBeltStatus();
     }
 
     /*
@@ -93,15 +92,21 @@ class ProductionItemService extends BaseService
     | GET Expired Items
     |--------------------------------------------------------------------------
     */
+    /**
+     * Read-only, same reasoning as conveyor(): filtered on expires_at rather
+     * than on the stored belt_status, which may lag behind by up to a minute.
+     */
     public function expired(string $outletId)
     {
-        return $this->query()
+        $items = $this->query()
             ->where('outlet_id', $outletId)
             ->whereNull('final_status')
-            ->where('belt_status', 'expired')
+            ->where('expires_at', '<=', now())
             ->whereDate('produced_at', today())
             ->orderBy('expires_at')
             ->get();
+
+        return $items->each->updateBeltStatus();
     }
 
     /*
@@ -111,11 +116,14 @@ class ProductionItemService extends BaseService
     */
     public function updateExpired(array $data) 
     {
+        // Gate on expires_at, not on the stored belt_status: the column is
+        // refreshed by a scheduled job and can lag by up to a minute, which
+        // would otherwise reject a plate that really has expired.
         $item = ProductionItem::query()
             ->where('id', $data['id'])
-            ->where('belt_status', 'expired')
+            ->where('expires_at', '<=', now())
             ->whereNull('final_status')
-            ->first(); 
+            ->first();
             
         if (!$item) {
             Log::warning('Update expired skipped', [
@@ -275,18 +283,6 @@ class ProductionItemService extends BaseService
             return $items->count();
         });
     }
-    /*
-    |--------------------------------------------------------------------------
-    | REMOVE EXPIRED
-    |--------------------------------------------------------------------------
-    */
-    public function removeExpired(array $ids)
-    {
-        return $this->query()
-            ->whereIn('id', $ids)
-            ->update(['belt_status' => 'expired']);
-    }
-        
     public function getSoldItem($outletId, $date)
     {
         return $this->query() 

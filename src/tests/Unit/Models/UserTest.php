@@ -3,6 +3,7 @@
 namespace Tests\Unit\Models;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class UserTest extends TestCase
@@ -31,7 +32,37 @@ class UserTest extends TestCase
         $this->assertSame('Operation', $claims['departemen']);
         $this->assertSame(['bandung'], $claims['outlet']);
         $this->assertSame(['cmms'], $claims['module_app']);
-        $this->assertSame('123456', $claims['pin']);
+
+        // The PIN must never ride along: a JWT payload is base64, not encrypted.
+        $this->assertArrayNotHasKey('pin', $claims);
+    }
+
+    public function test_setting_a_pin_hashes_it_and_derives_the_blind_index(): void
+    {
+        $user = new User(['pin' => '123456']);
+
+        $attributes = $user->getAttributes();
+
+        $this->assertNotSame('123456', $attributes['pin']);
+        $this->assertTrue(Hash::check('123456', $attributes['pin']));
+        $this->assertSame(User::pinLookup('123456'), $attributes['pin_lookup']);
+    }
+
+    public function test_clearing_the_pin_clears_the_blind_index_too(): void
+    {
+        $user = new User(['pin' => '123456']);
+        $user->pin = null;
+
+        $this->assertNull($user->getAttributes()['pin']);
+        $this->assertNull($user->getAttributes()['pin_lookup']);
+    }
+
+    public function test_pin_and_lookup_are_hidden_from_serialization(): void
+    {
+        $user = new User(['name' => 'Dapur', 'pin' => '123456']);
+
+        $this->assertArrayNotHasKey('pin', $user->toArray());
+        $this->assertArrayNotHasKey('pin_lookup', $user->toArray());
     }
 
     public function test_outlet_and_module_app_are_cast_to_array(): void

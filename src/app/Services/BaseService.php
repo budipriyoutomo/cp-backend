@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
@@ -70,8 +71,13 @@ class BaseService
         return $query;
     }
 
-    public function list(Request $request): LengthAwarePaginator
-    { 
+    /**
+     * `?per_page=all` deliberately returns an unpaginated Collection, so the
+     * return type has to admit both shapes — pinning it to LengthAwarePaginator
+     * turned that documented option into a 500.
+     */
+    public function list(Request $request): LengthAwarePaginator|Collection
+    {
         $query = $this->buildQuery($request);
 
         if ($request->query('per_page') === 'all') {

@@ -8,7 +8,11 @@ use App\Http\Resources\Sales\SalesDraftResource;
 use App\Services\Sales\SalesService;
 use Illuminate\Http\Request;
 
-class SalesController extends Controller
+/**
+ * Envelope is `{ status, message, data }` like every other controller.
+ * This one used to return bare JsonResources, i.e. `{ data }` with no status.
+ */
+class SalesController extends BaseApiController
 {
     public function __construct(
         protected SalesService $service
@@ -19,9 +23,9 @@ class SalesController extends Controller
     // ==========================
     public function index(Request $request)
     {
-        return SalesResource::collection(
+        return $this->resource(SalesResource::collection(
             $this->service->list($request)
-        );
+        ));
     }
 
     // ==========================
@@ -29,9 +33,9 @@ class SalesController extends Controller
     // ==========================
     public function drafts(Request $request)
     {
-        return SalesDraftResource::collection(
+        return $this->resource(SalesDraftResource::collection(
             $this->service->list($request)
-        );
+        ));
     }
 
     // ==========================
@@ -43,9 +47,11 @@ class SalesController extends Controller
             $request->validated()
         );
 
-        return (new SalesResource(
-            $sales->load('items.details','items.plateColor')
-        ))->response()->setStatusCode(201);
+        return $this->resource(
+            new SalesResource($sales->load('items.details', 'items.plateColor')),
+            'Sales saved',
+            201
+        );
     }
 
     // ==========================
@@ -58,8 +64,8 @@ class SalesController extends Controller
             $request->validated()
         );
 
-        return new SalesResource(
-            $sales->load('items.details','items.plateColor')
+        return $this->resource(
+            new SalesResource($sales->load('items.details', 'items.plateColor'))
         );
     }
 
@@ -69,9 +75,7 @@ class SalesController extends Controller
     // ==========================
     public function show($id)
     {
-       return new SalesResource(
-            $this->service->show($id)
-        );
+        return $this->resource(new SalesResource($this->service->show($id)));
     }
 
     // ==========================
@@ -89,6 +93,6 @@ class SalesController extends Controller
             $request->date
         );
 
-        return new SalesResource($data);
+        return $this->resource(new SalesResource($data));
     }
 }

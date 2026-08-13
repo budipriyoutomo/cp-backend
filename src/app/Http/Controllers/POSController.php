@@ -3,8 +3,7 @@
 namespace App\Http\Controllers;
 
     use Illuminate\Http\Request;
-    use Illuminate\Support\Collection;
-    use App\Http\Resources\POS\POSComparisonResource;  
+    use App\Http\Resources\POS\POSComparisonResource;
 
     use App\Services\POSService;
     use App\Services\Production\ProductionItemService;
@@ -144,11 +143,6 @@ namespace App\Http\Controllers;
                     'selisih' => $posSold - $productionSold,
                 ];
             })->values();
-        }
-
-        public function subscribePOSData(Request $request)
-        {
-            
         }
 
     }

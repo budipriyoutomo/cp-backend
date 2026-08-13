@@ -105,6 +105,20 @@ class PlateColorTest extends TestCase
         ])->assertStatus(403)->assertJsonPath('message', 'Unauthorized access');
     }
 
+    public function test_index_supports_per_page_all(): void
+    {
+        $admin = $this->user('admin');
+        PlateColors::create(['platename' => 'Putih', 'price' => 1000]);
+        PlateColors::create(['platename' => 'Hitam', 'price' => 2000]);
+
+        // Regression: BaseService::list() declared a LengthAwarePaginator return
+        // type, so this documented option used to blow up with a 500.
+        $this->actingAs($admin, 'api')->getJson('/api/master/platecolor?per_page=all')
+            ->assertOk()
+            ->assertJsonPath('status', true)
+            ->assertJsonCount(2, 'data');
+    }
+
     public function test_guest_cannot_access_plate_colors(): void
     {
         $this->getJson('/api/master/platecolor')->assertStatus(401);

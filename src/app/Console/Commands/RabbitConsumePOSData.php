@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use Illuminate\Support\Facades\Log;
+use App\Models\FailedPosMessage;
 use App\Services\POSService;
 
 class RabbitConsumePOSData extends Command
@@ -72,12 +73,29 @@ class RabbitConsumePOSData extends Command
                         Log::error('❌ ERROR CONSUME POSDATA: ' . $e->getMessage(), [
                             'body' => $msg->body
                         ]);
- 
-                        $channel->basic_nack(
-                            $msg->delivery_info['delivery_tag'],
-                            false,
-                            false
-                        );
+
+                        // Park the message before dropping it. There is no
+                        // dead-letter exchange, so without this the payload is
+                        // gone for good and the day's POS data is unrecoverable.
+                        try {
+                            FailedPosMessage::create([
+                                'payload' => $msg->body,
+                                'error'   => $e->getMessage(),
+                            ]);
+
+                            // Safely stored, so the broker can let it go.
+                            $channel->basic_ack($msg->delivery_info['delivery_tag']);
+                        } catch (\Throwable $storeError) {
+                            // Could not park it — leave it to the broker rather
+                            // than losing it silently.
+                            Log::error('❌ GAGAL MENYIMPAN DEAD LETTER POSDATA: ' . $storeError->getMessage());
+
+                            $channel->basic_nack(
+                                $msg->delivery_info['delivery_tag'],
+                                false,
+                                false
+                            );
+                        }
                     }
                 };
 

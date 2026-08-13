@@ -43,6 +43,13 @@ services:
       - redis
     networks:
       - internal_net
+    # src/.env tidak lagi ikut ke dalam image (lihat .dockerignore) — kredensial
+    # DB, JWT_SECRET, dan kunci AWS masuk lewat sini saat runtime. File ini
+    # gitignored; isinya harus versi produksi di server, bukan salinan dev.
+    env_file:
+      - ./src/.env
+    # Kunci di bawah menang atas env_file, dan sekarang benar-benar terpakai:
+    # config di-cache oleh entrypoint setelah env ada, bukan saat build.
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
@@ -67,17 +74,24 @@ services:
     image: api-app
     container_name: posdata-worker
     restart: always
+    depends_on:
+      - redis
     networks:
       - internal_net
+    # Worker pakai image yang sama, jadi ia juga kehilangan src/.env yang dulu
+    # terbawa. Tanpa baris ini ia tidak punya kredensial DB sama sekali.
+    env_file:
+      - ./src/.env
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
       QUEUE_CONNECTION: rabbitmq
-      RABBITMQ_HOST: 202.138.226.247
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: maharasa
-      RABBITMQ_PASSWORD: b@nd0eng
-      RABBITMQ_VHOST: /
+      # Values come from backend/.env, which is gitignored. See .env.example.
+      RABBITMQ_HOST: ${RABBITMQ_HOST}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
     volumes:
       - ./docker/supervisord-worker.conf:/etc/supervisor/conf.d/supervisord.conf
 

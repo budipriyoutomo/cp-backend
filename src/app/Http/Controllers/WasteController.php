@@ -25,7 +25,7 @@ class WasteController extends BaseApiController
             'plateColorId' => ['nullable'],
         ]);
 
-        $data = $this->service->wasteService->getAll(
+        $data = $this->service->wasteReport->getAll(
             $request->only([
                 'outletId',
                 'date',
@@ -49,7 +49,7 @@ class WasteController extends BaseApiController
             'date' => ['required', 'date'],
         ]);
 
-        $data = $this->service->wasteService->getSummary(
+        $data = $this->service->wasteReport->getSummary(
             $request->only([
                 'outletId',
                 'date',
@@ -67,7 +67,7 @@ class WasteController extends BaseApiController
      */
     public function show(WasteRecord $waste)
     {
-        $data = $this->service->wasteService->getById($waste);
+        $data = $this->service->wasteReport->getById($waste);
 
         return $this->success(
             new WasteResource($data),

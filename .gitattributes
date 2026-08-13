@@ -1,0 +1,13 @@
+# Git di Windows checkout dengan CRLF (core.autocrlf=true di mesin ini), dan
+# semua file di bawah ini dibaca oleh Linux di dalam container.
+#
+# Ini bukan soal kerapian. Shebang ber-CRLF membuat exec gagal dengan pesan
+# menyesatkan "no such file or directory", dan Debian cron menolak crontab yang
+# mengandung \r tanpa bilang apa-apa. Yang kedua itu sudah pernah terjadi:
+# docker/laravel-cron ter-checkout CRLF dan scheduler tidak pernah jalan.
+
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.conf          text eol=lf
+docker/**       text eol=lf
+scripts/**      text eol=lf

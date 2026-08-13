@@ -1,0 +1,5 @@
+# docker-compose reads this; it holds broker credentials.
+.env
+
+# Let's Encrypt account key + issued certificates.
+letsencrypt/

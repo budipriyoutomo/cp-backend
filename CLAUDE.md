@@ -1,0 +1,180 @@
+# Backend — Laravel API
+
+Laravel 10 / PHP 8.2 / PostgreSQL. Kode aplikasi ada di `src/`, konfigurasi deploy di root `backend/`.
+
+Baca dulu [../CLAUDE.md](../CLAUDE.md) untuk konteks domain.
+
+```
+backend/
+├── docker-compose.yml     # traefik + redis + api + posdata-worker
+├── Dockerfile             # multi-stage: builder (composer) → runtime (nginx+fpm+supervisor)
+├── docker/                # nginx.conf, default.conf, supervisord.conf, entrypoint.sh
+├── traefik/
+└── src/                   # aplikasi Laravel
+```
+
+---
+
+## Arsitektur Layer
+
+```
+routes/api.php
+   └── Controller (extends BaseApiController)   — routing, tidak ada logika bisnis
+         ├── FormRequest (extends BaseRequest)  — validasi + normalisasi input
+         ├── Service (extends BaseService)      — SEMUA logika bisnis & transaksi DB
+         │     └── Model (extends BaseModel)    — UUID, softDelete, userstamps, scope
+         └── Resource (extends BaseResource)    — bentuk JSON keluar
+```
+
+Aturan tegas: **kalau ada `if` yang menyangkut aturan bisnis di dalam Controller, itu salah tempat.** Pindahkan ke Service.
+
+### `BaseApiController`
+Menyediakan bentuk respons seragam:
+- `success($data, $message, $code)` → `{ status, message, data }`
+- `error($message, $code, $errors)` → `{ status, message, errors }`
+- `resource($resource, ...)` → menangani `JsonResource` maupun `ResourceCollection`; kalau paginator, otomatis menambahkan blok `meta`.
+
+Semua controller extend `BaseApiController`, jadi bentuk respons seragam: `{ status, message, data }` untuk sukses, `{ status, message, errors }` untuk gagal — termasuk `RoleMiddleware` dan `failedValidation()` di form request. `ResponseEnvelopeTest` menjaganya. Jangan tulis `response()->json()` manual di controller baru.
+
+### `BaseService`
+Query builder generik yang menerima `Request`:
+- `?include=relasi,relasi` — eager load tambahan
+- `?search=teks` — dicari di kolom `$searchable`
+- `?<field>=nilai` — filter langsung, hanya untuk field di `$searchable`
+- `?sort=field,-field` — `-` berarti descending, hanya untuk field di `$sortable`
+- `?per_page=15` atau `?per_page=all`
+
+Subclass cukup mendeklarasikan `$model`, `$relations`, `$searchable`, `$sortable`. `delete()` otomatis men-set `is_active = 0` sebelum soft delete bila kolomnya ada.
+
+### `BaseAggregateService`
+Untuk agregat header+item (`ProductionPlan`+items, `SalesHeader`+items+details). Menyediakan `createItems()` / `syncItems()` yang bisa di-override — `SalesService` meng-override keduanya untuk menghitung ulang `selisih` dan mengelola level ketiga (`sales_item_details`).
+
+---
+
+## Traits Model
+
+| Trait | Fungsi |
+|-------|--------|
+| `HasUuid` | Generate UUID di `creating`, set `incrementing = false`, `keyType = 'string'` |
+| `HasUserstamps` | Isi `created_by`/`updated_by`/`deleted_by` dari `Auth::id()` |
+| `HasActive` | Scope untuk kolom `is_active` |
+| `NormalizeMySqlDates` | Normalisasi format tanggal |
+| `RunningNumberModuleTrait` | Generator nomor urut dokumen |
+
+`BaseModel` sudah memakai `SoftDeletes + HasUserstamps + HasUuid`. **Jangan override `boot()` di model turunan** — event `creating`/`updating` sudah ditangani trait.
+
+Migration memakai macro `$table->fullstamps()` (mendefinisikan `created_by`/`updated_by`/`deleted_by`), terdaftar di `AppServiceProvider`.
+
+---
+
+## Routing
+
+`routes/api.php`. Ada macro `Route::crud($uri, $controller, $name)` di `RouteServiceProvider` yang meng-generate 5 route dan memetakannya ke method `{$name}Index`, `{$name}Store`, `{$name}Show`, `{$name}Update`, `{$name}Destroy` pada satu controller. Dipakai oleh `MasterController` untuk platecolor / menu / outlet / waste-reason.
+
+**Urutan route penting.** Route statis harus dideklarasikan sebelum wildcard `/{id}`, kalau tidak akan tertangkap `show()`. Sudah ada komentar peringatan di `routes/api.php` soal `/sales/by-date`.
+
+### Status proteksi route
+**Semua** route domain ada di belakang `auth:api`. Hanya `/register`, `/login`, `/login-pin` yang publik.
+
+Lapisan `role:` yang sudah terpasang:
+- `/master/*` — `role:admin` untuk write, `role:admin,kitchen,service` untuk read
+- `/users/*` — `role:admin`
+- `DELETE /closing-reports/{id}` — `role:admin,manager`
+
+Sisanya (`/production/*`, `/reports/*`, `/sales/*`, `/waste/*`) baru butuh terautentikasi, belum dipetakan per role. `RouteProtectionTest` menjaga agar tidak ada yang bocor lagi — tambahkan entri di data provider-nya saat menambah route baru.
+
+---
+
+## Middleware
+
+**`Idempotency`** (global di grup `api`) — kunci keandalan sistem ini.
+- Aktif untuk POST/PUT/PATCH yang membawa header `X-Client-Request-Id`.
+- Melewatkan endpoint auth (`login`, `login-pin`, `logout`, `register`, `auth/refresh`).
+- Menyimpan respons **sukses saja** (2xx) ke tabel `processed_requests`; 4xx/5xx dibiarkan bisa dijalankan ulang.
+- Request ulang dengan key sama → respons tersimpan diputar ulang + header `X-Idempotent-Replay: true`.
+- `QueryException` saat menyimpan (race condition dua request bersamaan) sengaja ditelan.
+
+**`RoleMiddleware`** (alias `role`) — `role:admin,kitchen` mengizinkan salah satu. Menolak dengan 403 `{ success: false, message: 'Unauthorized access' }`.
+
+**Throttle** — 60 request/menit per user-id (atau IP kalau anonim), didefinisikan di `RouteServiceProvider`.
+
+---
+
+## Auth
+
+JWT via `tymon/jwt-auth`. Guard `api`. Sanctum masih ter-install dan dipakai di satu route `/user` sisa scaffolding, tapi bukan mekanisme utama.
+
+Custom claims di token: `role`, `departemen`, `outlet`, `module_app`. **PIN sengaja tidak ikut** — payload JWT hanya base64, bukan enkripsi.
+
+**PIN.** `users.pin` adalah bcrypt; `users.pin_lookup` adalah HMAC-SHA256(pin, `APP_KEY`) yang unik dan ter-index. Keduanya ditulis oleh mutator `User::setPinAttribute()` — jangan pernah isi `pin_lookup` langsung, dan jangan tambahkan cast `hashed` ke `pin` (akan double-hash). `loginByPin()` mencari lewat `pin_lookup` lalu verifikasi `Hash::check()`. Endpoint-nya kena `throttle:5,1`.
+
+---
+
+## Service Penting
+
+### `ProductionService` — agregator
+Bukan service berisi logika, tapi kumpulan sub-service yang di-inject ke controller:
+
+```php
+$this->service->dashboard      // ProductionDashboardService  — stats
+$this->service->plan           // ProductionPlanService       — plan CRUD
+$this->service->item           // ProductionItemService       — piring (inti)
+$this->service->wasteRecord    // WasteRecordService          — MENULIS waste_records
+$this->service->wasteReport    // WasteService                — MEMBACA laporan waste
+```
+
+### `Production/ProductionItemService`
+Pusat aturan bisnis piring.
+
+| Method | Catatan |
+|--------|---------|
+| `produce()` | Membuat N baris terpisah (quantity=1 masing-masing) dalam satu transaksi. `expires_at = now + menu.shelf_life ?? 60` menit. |
+| `conveyor()` / `expired()` | **Murni baca.** Memfilter lewat `expires_at` (sumber kebenaran) dan menyegarkan `belt_status` hanya di memori untuk respons. Kolom tersimpan disegarkan `production:refresh-belt-status` tiap menit. |
+| `markSold()` / `markWaste()` | Dilindungi `assertWithinProductionDay()` — lempar `BusinessRuleException` kalau ada id dari hari sebelumnya. |
+| `autoWasteCarryOver()` | Menutup piring hari lalu jadi waste. `wasted_at` = `produced_at`, **bukan** `now()`. Juga menulis `WasteRecord`. |
+| `countUnresolved()` | Gerbang untuk "Get Data POS". |
+| `getSoldItem()` / `getWasteItem()` | Join ke `plate_colors` dengan cast `plate_colors.id::text` — karena `production_items.plate_color` bertipe `varchar` sementara `plate_colors.id` bertipe `uuid`. |
+
+Ketidakcocokan tipe `varchar` vs `uuid` ini muncul di beberapa tempat. `WasteAnalysisService` menghindarinya dengan tidak melakukan JOIN sama sekali dan meresolusi nama plate color di PHP — pola ini lebih portabel (test jalan di SQLite, produksi di PostgreSQL). **Ikuti pola itu untuk query baru.**
+
+### `ClosingReport/ClosingReportService`
+- `getData()` dan `submit()` sama-sama mensyaratkan `SalesHeader` dengan `status = 'submitted'` di tanggal yang sama, kalau tidak → `BusinessRuleException`.
+- Entry laporan diturunkan dari `sales_items`, bukan dihitung ulang dari `production_items`.
+- Hanya laporan `draft` yang boleh dihapus.
+- `closing_reports` unik per (`outlet_id`, `date`).
+
+### `POSService` + `RabbitConsumePOSData`
+Worker AMQP jangka panjang: exchange `posdata_exchange` (direct), queue `posdata.queue`, routing key `posdata.created`. QoS prefetch 1, ack manual, nack tanpa requeue kalau gagal, reconnect loop 5 detik.
+
+`storeFromEvent()` memetakan payload berdasarkan **nama** — `platecolor` dicocokkan ke `plate_colors.platename`, `outlet` ke `outlets.code`, keduanya dinormalisasi (lowercase, strip non-alfanumerik, rapatkan spasi). Perilaku upsert: kalau (outlet, plate color, date) sudah ada, `sold` ditimpa.
+
+Kalau pemetaan gagal, payload diparkir ke tabel `failed_pos_messages` lalu di-ack — tidak hilang seperti dulu. Perbaiki master data, lalu `php artisan pos:replay-failed` (ada `--dry-run` dan `--id=`).
+
+---
+
+## Testing
+
+```bash
+cd src && php artisan test
+php artisan test --filter=ProductionItemTest
+```
+
+PHPUnit 10, SQLite in-memory (`phpunit.xml`). Helper di `tests/Concerns/`: `CreatesUsers`, `SeedsProductionData`.
+
+Karena test berjalan di SQLite tapi produksi di PostgreSQL: **selalu beri alias eksplisit pada agregat** (`SUM(quantity) as total`) — nama kolom hasil `SUM()` tanpa alias berbeda antar driver. Sudah ada komentar soal ini di `WasteAnalysisService`.
+
+---
+
+## Deploy
+
+`Dockerfile` multi-stage: stage builder hanya menjalankan `composer install --no-dev`; stage runtime menyalin hasilnya ke image nginx + php-fpm + supervisor.
+
+**Cache config dibangun saat container start, bukan saat build.** `docker/entrypoint.sh` menjalankan `config:cache` + `route:cache` + `view:cache` setelah environment masuk, lalu `exec supervisord`. Urutan ini penting: config yang di-cache mengalahkan environment variable, jadi meng-cache sebelum env ada akan membekukan nilai yang salah secara diam-diam. Konsekuensinya, **mengubah environment variable butuh restart container**, bukan sekadar reload.
+
+`src/.env` **tidak** ikut ke dalam image (`.dockerignore`). Kredensial masuk saat runtime lewat `env_file: ./src/.env` di `docker-compose.yml`, jadi file `.env` produksi harus ada di server. Blok `environment:` di compose menang atas `env_file`.
+
+**Scheduler dijalankan supervisord (`artisan schedule:work`), bukan cron.** Jangan kembalikan ke `/etc/cron.d` — versi cron-nya pernah mati diam-diam selama berbulan-bulan (path salah, daemon tidak pernah dijalankan, file ter-checkout CRLF). Ada `.gitattributes` yang memaksa LF untuk `docker/**`, `*.sh`, dan `*.conf`; jangan dihapus.
+
+Traefik menangani TLS otomatis (Let's Encrypt, tlschallenge) untuk `api.maharasa.calira.my.id`, dengan redirect HTTP→HTTPS.
+
+`posdata-worker` memakai image yang sama dengan `api` tapi menimpa `supervisord.conf` agar menjalankan consumer RabbitMQ, bukan web server.

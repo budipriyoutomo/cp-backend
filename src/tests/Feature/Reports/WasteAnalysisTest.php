@@ -8,13 +8,23 @@ use App\Models\PlateColors;
 use App\Models\ProductionItem;
 use App\Models\WasteRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesUsers;
 use Tests\Concerns\SeedsProductionData;
 use Tests\TestCase;
 
 class WasteAnalysisTest extends TestCase
 {
     use RefreshDatabase;
+    use CreatesUsers;
     use SeedsProductionData;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Every route exercised here now sits behind auth:api.
+        $this->actingAsRole('admin');
+    }
 
     private function waste(Outlet $outlet, Menu $menu, PlateColors $color, int $qty, string $reason, string $date): void
     {

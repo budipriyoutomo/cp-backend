@@ -18,14 +18,39 @@ class RoleMiddleware
 
         $user = auth()->user();
 
-
-        if (! $user || ! in_array($user->role, $roles)) {
+        if (! $user || ! array_intersect($this->rolesOf($user), $roles)) {
+            // Same envelope as BaseApiController::error().
             return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized access'
+                'status'  => false,
+                'message' => 'Unauthorized access',
+                'errors'  => null,
             ], 403);
         }
 
         return $next($request);
+    }
+
+    /**
+     * `users.role` is documented as a JSON array but every code path so far
+     * writes a plain string, and older rows may hold either. Normalise both
+     * shapes so a legitimately-roled user is never locked out by the format.
+     */
+    private function rolesOf($user): array
+    {
+        $role = $user->role;
+
+        if (is_array($role)) {
+            return $role;
+        }
+
+        if (is_string($role)) {
+            $decoded = json_decode($role, true);
+
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return [$role];
     }
 }

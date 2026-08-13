@@ -4,13 +4,23 @@ namespace Tests\Feature\Production;
 
 use App\Models\ProductionItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesUsers;
 use Tests\Concerns\SeedsProductionData;
 use Tests\TestCase;
 
 class ProductionItemTest extends TestCase
 {
     use RefreshDatabase;
+    use CreatesUsers;
     use SeedsProductionData;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Every route exercised here now sits behind auth:api.
+        $this->actingAsRole('admin');
+    }
 
     public function test_produce_creates_one_item_per_quantity(): void
     {
@@ -54,7 +64,7 @@ class ProductionItemTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors(['menuId']);
     }
 
-    public function test_conveyor_returns_active_items_and_flags_expired(): void
+    public function test_conveyor_returns_only_items_still_on_the_belt(): void
     {
         $outlet = $this->createOutlet();
         $menu   = $this->createMenu();
@@ -67,11 +77,58 @@ class ProductionItemTest extends TestCase
         $response->assertOk()->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $fresh->id);
 
-        // The past-due item should have been flagged expired and excluded.
+        // The past-due item is excluded because expires_at says so — the stored
+        // belt_status is not consulted, and the GET writes nothing.
         $this->assertDatabaseHas('production_items', [
             'id'          => $expired->id,
-            'belt_status' => 'expired',
+            'belt_status' => 'fresh',
         ]);
+    }
+
+    public function test_conveyor_reports_belt_status_from_expiry_without_saving(): void
+    {
+        $outlet = $this->createOutlet();
+        $menu   = $this->createMenu();
+
+        // Stored value is stale: the scheduler has not caught up yet.
+        $item = $this->createProductionItem($outlet, $menu, [
+            'expires_at'  => now()->addMinutes(5),
+            'belt_status' => 'fresh',
+        ]);
+
+        $this->getJson('/api/production/conveyor?outletId=' . $outlet->id)
+            ->assertOk()
+            ->assertJsonPath('data.0.beltStatus', 'warning');
+
+        // The response is accurate, the row is untouched.
+        $this->assertDatabaseHas('production_items', [
+            'id'          => $item->id,
+            'belt_status' => 'fresh',
+        ]);
+    }
+
+    public function test_refresh_belt_status_command_updates_the_stored_column(): void
+    {
+        $outlet = $this->createOutlet();
+        $menu   = $this->createMenu();
+
+        $expired = $this->createProductionItem($outlet, $menu, ['expires_at' => now()->subMinute(), 'belt_status' => 'fresh']);
+        $warning = $this->createProductionItem($outlet, $menu, ['expires_at' => now()->addMinutes(5), 'belt_status' => 'fresh']);
+        $fresh   = $this->createProductionItem($outlet, $menu, ['expires_at' => now()->addHour(), 'belt_status' => 'expired']);
+        $done    = $this->createProductionItem($outlet, $menu, [
+            'expires_at'   => now()->subMinute(),
+            'belt_status'  => 'fresh',
+            'final_status' => 'sold',
+            'sold_at'      => now(),
+        ]);
+
+        $this->artisan('production:refresh-belt-status')->assertSuccessful();
+
+        $this->assertSame('expired', $expired->fresh()->belt_status);
+        $this->assertSame('warning', $warning->fresh()->belt_status);
+        $this->assertSame('fresh', $fresh->fresh()->belt_status);
+        // Already finalised, so it is off the belt and left alone.
+        $this->assertSame('fresh', $done->fresh()->belt_status);
     }
 
     public function test_expired_returns_only_expired_items_for_today(): void
@@ -95,7 +152,7 @@ class ProductionItemTest extends TestCase
     {
         $outlet = $this->createOutlet();
         $menu   = $this->createMenu();
-        $item   = $this->createProductionItem($outlet, $menu, ['belt_status' => 'expired']);
+        $item   = $this->createProductionItem($outlet, $menu, ['belt_status' => 'expired', 'expires_at' => now()->subMinute()]);
 
         $this->putJson("/api/production/expired/{$item->id}", ['status' => 'sold'])
             ->assertOk()
@@ -110,7 +167,7 @@ class ProductionItemTest extends TestCase
     {
         $outlet = $this->createOutlet();
         $menu   = $this->createMenu();
-        $item   = $this->createProductionItem($outlet, $menu, ['belt_status' => 'expired']);
+        $item   = $this->createProductionItem($outlet, $menu, ['belt_status' => 'expired', 'expires_at' => now()->subMinute()]);
 
         $this->putJson("/api/production/expired/{$item->id}", [
             'status' => 'waste',
@@ -132,7 +189,7 @@ class ProductionItemTest extends TestCase
     {
         $outlet = $this->createOutlet();
         $menu   = $this->createMenu();
-        $item   = $this->createProductionItem($outlet, $menu, ['belt_status' => 'expired']);
+        $item   = $this->createProductionItem($outlet, $menu, ['belt_status' => 'expired', 'expires_at' => now()->subMinute()]);
 
         $this->putJson("/api/production/expired/{$item->id}", ['status' => 'invalid'])
             ->assertStatus(422)
@@ -243,23 +300,11 @@ class ProductionItemTest extends TestCase
             ->assertJsonPath('status', false);
     }
 
-    public function test_remove_expired_sets_status_and_validates(): void
+    public function test_remove_expired_route_is_gone(): void
     {
-        $outlet = $this->createOutlet();
-        $menu   = $this->createMenu();
-        $item   = $this->createProductionItem($outlet, $menu);
-
-        $this->postJson('/api/production/remove-expired', ['itemIds' => [$item->id]])
-            ->assertOk()
-            ->assertJsonPath('message', 'Expired items removed');
-
-        $this->assertDatabaseHas('production_items', [
-            'id'          => $item->id,
-            'belt_status' => 'expired',
-        ]);
-
-        $this->postJson('/api/production/remove-expired', [])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['itemIds']);
+        // POST /production/remove-expired only re-stamped belt_status without
+        // any production-day guard, and nothing called it. Removed outright.
+        $this->postJson('/api/production/remove-expired', ['itemIds' => []])
+            ->assertNotFound();
     }
 }

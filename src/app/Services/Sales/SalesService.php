@@ -2,6 +2,8 @@
 
 namespace App\Services\Sales;
 
+use App\Exceptions\BusinessRuleException;
+use App\Models\ClosingReport;
 use App\Models\SalesHeader;
 use App\Models\SalesItem;
 use App\Models\SalesItemDetail;
@@ -9,7 +11,8 @@ use App\Http\Resources\Sales\SalesClosingReportResource;
 use Illuminate\Database\Eloquent\Model;
 
 use App\Services\BaseAggregateService;
-use Illuminate\Http\Request; 
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class SalesService extends BaseAggregateService
@@ -18,6 +21,55 @@ class SalesService extends BaseAggregateService
 
     protected string $itemModel = SalesItem::class;
     protected string $itemForeignKey = 'sales_id';
+
+    // ==========================
+    // UPSERT PER (OUTLET, DATE)
+    // ==========================
+    /**
+     * There is exactly one sales header per outlet per day — the Sales Input
+     * screen only ever POSTs, so a second save for the same day has to update
+     * the existing header instead of inserting a rival one. Enforced in the
+     * database by a partial unique index on (outlet_id, date).
+     */
+    public function create(array $data): Model
+    {
+        $date = Carbon::parse($data['date'])->toDateString();
+
+        $this->assertClosingReportNotSubmitted($data['outlet_id'], $date);
+
+        $existing = SalesHeader::query()
+            ->where('outlet_id', $data['outlet_id'])
+            ->whereDate('date', $date)
+            ->first();
+
+        if ($existing) {
+            return $this->update($existing->id, $data);
+        }
+
+        return parent::create($data);
+    }
+
+    /**
+     * A submitted closing report is signed off by the kitchen and operation
+     * leaders, and its entries are derived from sales_items. Letting a later
+     * save rewrite those numbers would leave a signed report disagreeing with
+     * its own source, silently.
+     */
+    private function assertClosingReportNotSubmitted(string $outletId, string $date): void
+    {
+        $submitted = ClosingReport::query()
+            ->where('outlet_id', $outletId)
+            ->whereDate('date', $date)
+            ->where('status', 'submitted')
+            ->exists();
+
+        if ($submitted) {
+            throw new BusinessRuleException(
+                'Closing report tanggal ini sudah disubmit, jadi data sales-nya tidak bisa diubah lagi. '
+                . 'Hubungi admin kalau memang perlu koreksi.'
+            );
+        }
+    }
 
     // ==========================
     // OVERRIDE CREATE ITEMS

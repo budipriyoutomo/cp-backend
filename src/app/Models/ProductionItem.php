@@ -54,12 +54,17 @@ class ProductionItem extends BaseModel
     |--------------------------------------------------------------------------
     */
 
-    public function scopeOutlet($query, $outletId)
+    /**
+     * Named `forOutlet` / `beltFresh`, not `outlet` / `fresh`: Eloquent resolves
+     * a real method before a scope, so `outlet()` would hit the belongsTo
+     * relation and `fresh()` would hit Model::fresh() — neither would filter.
+     */
+    public function scopeForOutlet($query, $outletId)
     {
         return $query->where('outlet_id', $outletId);
     }
 
-    public function scopeFresh($query)
+    public function scopeBeltFresh($query)
     {
         return $query->where('belt_status', 'fresh');
     }

@@ -1,0 +1,49 @@
+# Build context adalah backend/. Apa pun di sini tidak ikut masuk image.
+#
+# Sebelumnya file ini tidak ada, jadi `COPY src/ .` menelan src/.env — berisi
+# kredensial DB, JWT_SECRET, dan kunci AWS — lalu membekukannya ke dalam layer
+# image. Siapa pun yang bisa pull image itu bisa membacanya. Sekarang .env
+# dibaca saat runtime lewat `env_file:` di docker-compose.yml.
+
+# ── Rahasia ──────────────────────────────────────────────────────────────────
+.env
+.env.*
+src/.env
+src/.env.*
+!.env.example
+!src/.env.example
+
+# Kunci akun Let's Encrypt + sertifikat terbit.
+letsencrypt/
+
+# ── Dibangun ulang di stage builder ──────────────────────────────────────────
+src/vendor/
+src/node_modules/
+
+# Cache milik mesin developer. bootstrap/cache/config.php yang paling berbahaya:
+# isinya .env lokal yang sudah dibekukan, dan config yang di-cache mengalahkan
+# environment variable saat runtime.
+src/bootstrap/cache/*.php
+src/storage/framework/cache/data/
+src/storage/framework/sessions/
+src/storage/framework/views/
+src/storage/framework/testing/
+src/storage/logs/*.log
+
+# ── Tidak dibutuhkan saat runtime ────────────────────────────────────────────
+src/tests/
+src/phpunit.xml
+src/.phpunit.cache
+src/.phpunit.result.cache
+
+.git/
+.gitignore
+.gitattributes
+.dockerignore
+docker-compose.yml
+README.md
+CLAUDE.md
+traefik/
+
+# Skrip backup dijalankan di host DB, bukan di container app.
+scripts/

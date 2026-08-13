@@ -42,7 +42,7 @@ class RoleMiddlewareTest extends TestCase
         $response = $this->runMiddleware($user, ['admin']);
 
         $this->assertSame(403, $response->getStatusCode());
-        $this->assertFalse($response->getData()->success);
+        $this->assertFalse($response->getData()->status);
         $this->assertSame('Unauthorized access', $response->getData()->message);
     }
 
@@ -51,6 +51,43 @@ class RoleMiddlewareTest extends TestCase
         $response = $this->runMiddleware(null, ['admin']);
 
         $this->assertSame(403, $response->getStatusCode());
-        $this->assertFalse($response->getData()->success);
+        $this->assertFalse($response->getData()->status);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | `users.role` shape tolerance
+    |--------------------------------------------------------------------------
+    | The docs describe role as a JSON array, the code writes a plain string,
+    | and an older database may hold either. All three must behave the same,
+    | otherwise a legitimately-roled user is locked out by a storage detail.
+    */
+
+    public function test_accepts_a_role_stored_as_a_php_array(): void
+    {
+        $user = new User();
+        $user->role = ['kitchen', 'service'];
+
+        $response = $this->runMiddleware($user, ['admin', 'kitchen']);
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    public function test_accepts_a_role_stored_as_a_json_string(): void
+    {
+        $user = new User(['role' => '["manager"]']);
+
+        $response = $this->runMiddleware($user, ['admin', 'manager']);
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    public function test_still_rejects_an_array_role_with_no_overlap(): void
+    {
+        $user = new User(['role' => '["service"]']);
+
+        $response = $this->runMiddleware($user, ['admin']);
+
+        $this->assertSame(403, $response->getStatusCode());
     }
 }

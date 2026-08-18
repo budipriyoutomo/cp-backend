@@ -54,7 +54,7 @@ Route::middleware('auth:api')->post('/auth/refresh', [AuthController::class, 're
 // MASTER ROUTES
 // ======================================================
 Route::prefix('master')
-    ->middleware('auth:api')
+    ->middleware(['auth:api', 'outlet.access'])
     ->group(function () {
 
         Route::middleware('role:admin')->group(function () {
@@ -98,7 +98,7 @@ Route::prefix('users')
 // PRODUCTION ROUTES
 // ======================================================
 
-Route::prefix('production')->middleware('auth:api')->group(function () {
+Route::prefix('production')->middleware(['auth:api', 'outlet.access'])->group(function () {
 
     Route::get('/stats', [ProductionController::class, 'stats']);
     Route::get('/plan', [ProductionController::class, 'plan']);
@@ -124,7 +124,7 @@ Route::prefix('production')->middleware('auth:api')->group(function () {
 // REPORT ROUTES
 // ======================================================
 
-Route::prefix('reports')->middleware('auth:api')->group(function () {
+Route::prefix('reports')->middleware(['auth:api', 'outlet.access'])->group(function () {
 
     Route::get('/pos-data', [POSController::class, 'getposData']);
     Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
@@ -132,7 +132,7 @@ Route::prefix('reports')->middleware('auth:api')->group(function () {
     Route::get('/waste-analysis', [ReportsController::class, 'wasteAnalysis']);
 });
 
-Route::prefix('sales')->middleware('auth:api')->group(function () {
+Route::prefix('sales')->middleware(['auth:api', 'outlet.access'])->group(function () {
     Route::get('/', [SalesController::class, 'drafts']);
     Route::post('/', [SalesController::class, 'store']);
     // NOTE: static routes must be declared before the /{id} wildcard, otherwise
@@ -141,7 +141,7 @@ Route::prefix('sales')->middleware('auth:api')->group(function () {
     Route::get('/{id}', [SalesController::class, 'show']);
 });
 
-Route::prefix('closing-reports')->middleware('auth:api')->group(function () {
+Route::prefix('closing-reports')->middleware(['auth:api', 'outlet.access'])->group(function () {
     Route::get('/', [ClosingReportController::class, 'index']);
     Route::get('/data', [ClosingReportController::class, 'data']);
     Route::post('/submit', [ClosingReportController::class, 'submit']);
@@ -153,7 +153,7 @@ Route::prefix('closing-reports')->middleware('auth:api')->group(function () {
         ->middleware('role:admin,manager');
 });
 
-Route::prefix('waste')->middleware('auth:api')->group(function () {
+Route::prefix('waste')->middleware(['auth:api', 'outlet.access'])->group(function () {
 
     Route::get('/', [WasteController::class, 'index']);
     Route::get('/summary', [WasteController::class, 'summary']);

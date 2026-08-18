@@ -15,7 +15,10 @@ trait CreatesUsers
             'password'   => 'secret123',
             'role'       => $role,
             'departemen' => 'Operation',
-            'outlet'     => ['bandung'],
+            // Harus cocok dengan kode outlet di SeedsProductionData::createOutlet().
+            // Nilai lama 'bandung' tidak cocok kode mana pun, jadi tidak ada test
+            // yang benar-benar menguji batas outlet.
+            'outlet'     => ['BDG'],
             'module_app' => self::modulesForRole($role),
         ]);
     }

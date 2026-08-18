@@ -4,16 +4,24 @@ namespace App\Services\Production;
 
 use App\Models\PlateColors;
 use App\Models\ProductionItem;
-use App\Models\ProductionPlanItem; 
+use App\Models\ProductionPlanItem;
+use App\Services\Concerns\ResolvesOutletBrand;
 
 class ProductionDashboardService
 {
+    use ResolvesOutletBrand;
+
     public function stats(string $outletId)
     {
         $today = today();
 
-        // 🔥 ambil semua warna dari plan + production
-        $plateColors = PlateColors::where('is_active', true)
+        // Warna piring disaring ke brand outlet. Tanpa ini dashboard dapur
+        // menampilkan baris warna milik brand lain — selalu nol, tapi tetap
+        // memenuhi layar tablet dan bikin operator ragu.
+        $plateColors = $this->scopeToBrand(
+                PlateColors::where('is_active', true),
+                $this->brandIdForOutlet($outletId)
+            )
             ->get(['platename', 'id']);
 
         $targets = ProductionPlanItem::whereHas('plan', function ($q) use ($outletId, $today) {

@@ -24,9 +24,48 @@ class BaseResource extends JsonResource
         'grandtotal',
     ];
 
+    /**
+     * Kolom yang harus tetap teks, betapa pun isinya mirip angka.
+     *
+     * `formatValue()` menebak tipe dari ISI nilai, bukan dari kolomnya. Untuk
+     * kolom `varchar` yang kebetulan berisi digit, tebakan itu selalu salah dan
+     * merusak dua hal sekaligus:
+     *
+     * - Pemakai menerima number, bukan string. `menus.code = "12345"` datang
+     *   sebagai `12345`, dan frontend yang memanggil `.toLowerCase()` di atasnya
+     *   langsung mati.
+     * - Nol di depan hilang. `"007"` lolos `ctype_digit()` lalu jadi `7`.
+     *   Ini bukan sekadar salah tipe — itu nilai yang berbeda.
+     *
+     * Daftarnya sengaja opt-in per resource: menonaktifkan tebakan itu secara
+     * global akan mengubah bentuk respons setiap endpoint sekaligus, termasuk
+     * `price` yang memang bergantung padanya (cast `decimal:2` mengembalikan
+     * string dari Eloquent, dan pemakainya mengharapkan angka).
+     *
+     * Hanya resource yang benar-benar melewatkan nilai ke `formatValue()` yang
+     * perlu mengisinya — lewat `autoDetect()` atau memanggilnya sendiri.
+     * Resource yang menyusun `toArray()` sepenuhnya manual dari atribut model
+     * (`ProductionItemResource`, `WasteRecordResource`, `WasteResource`,
+     * `ProductionMenuResource`, `ClosingReportResource`,
+     * `ClosingReportEntryResource`, `SalesDraftResource`,
+     * `SalesClosingReportResource`) tidak pernah melewati fungsi ini, jadi
+     * nilainya sudah apa adanya. Relasi yang ter-load juga aman: `autoDetect()`
+     * meneruskan array mentah tanpa memformatnya.
+     *
+     * @var array<int, string>
+     */
+    protected array $textFields = [];
+
     protected function formatValue($key, $value)
     {
         if ($value === null) return null;
+
+        // Dijaga di sini, bukan di autoDetect(): sebagian resource memanggil
+        // formatValue() langsung per-field (lihat DailySummaryResource), jadi
+        // penjagaan di pemanggil saja akan bocor di jalur itu.
+        if (in_array($key, $this->textFields, true)) {
+            return trim((string) $value);
+        }
 
         if (is_bool($value)) return $value;
 

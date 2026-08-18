@@ -155,6 +155,27 @@ namespace App\Http\Controllers;
             return $this->success(null, 'Items marked as waste');
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Close Day
+        |--------------------------------------------------------------------------
+        | Sisa plate hari ini yang belum difinalisasi ditandai terjual. Operator
+        | hanya menandai waste satu per satu; sisanya dianggap laku saat tutup hari.
+        */
+        public function closeDay(Request $request)
+        {
+            $request->validate([
+                'outletId' => ['required', 'exists:outlets,id'],
+            ]);
+
+            $closed = $this->service->item->closeDaySold($request->outletId);
+
+            return $this->success(
+                ['closed' => $closed],
+                "{$closed} plate ditandai terjual"
+            );
+        }
+
 
         /*
         |--------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 namespace Tests\Concerns;
 
 use App\Models\User;
+use App\Support\AccessOptions;
 
 trait CreatesUsers
 {
@@ -15,8 +16,25 @@ trait CreatesUsers
             'role'       => $role,
             'departemen' => 'Operation',
             'outlet'     => ['bandung'],
-            'module_app' => ['cmms'],
+            'module_app' => self::modulesForRole($role),
         ]);
+    }
+
+    /**
+     * Setiap role kecuali `manager` punya modul bernama sama. `app` selalu ikut
+     * sebagai modul dasar.
+     *
+     * Fixture lama menulis `['cmms']` — modul dari aplikasi lain yang tidak
+     * pernah ada di sistem ini, jadi tidak ada test yang benar-benar menguji
+     * apa pun soal akses modul.
+     *
+     * @return array<int, string>
+     */
+    protected static function modulesForRole(string $role): array
+    {
+        return in_array($role, AccessOptions::MODULE_APPS, true)
+            ? ['app', $role]
+            : ['app'];
     }
 
     /**

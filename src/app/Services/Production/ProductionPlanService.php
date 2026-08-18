@@ -2,15 +2,20 @@
 
 namespace App\Services\Production;
 
+use App\Exceptions\BusinessRuleException;
+use App\Models\PlateColors;
 use App\Models\ProductionPlan;
 use App\Models\ProductionPlanItem;
 use App\Services\BaseAggregateService;
+use App\Services\Concerns\ResolvesOutletBrand;
 
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 class ProductionPlanService extends BaseAggregateService
 {
+    use ResolvesOutletBrand;
+
     protected string $model = ProductionPlan::class;
     protected string $itemModel = ProductionPlanItem::class;
     protected string $itemForeignKey = 'production_plan_id';
@@ -50,6 +55,8 @@ class ProductionPlanService extends BaseAggregateService
 
     public function upsertPlan(string $outletId, string $date, array $plans)
     {
+        $this->assertPlateColorsBelongToOutletBrand($outletId, $plans);
+
         DB::transaction(function () use ($outletId, $date, $plans) {
 
             $now = now();
@@ -110,5 +117,44 @@ class ProductionPlanService extends BaseAggregateService
             // insert baru
             ProductionPlanItem::insert($finalItems);
         });
+    }
+
+    /**
+     * Target produksi ditulis per warna piring, dan warna adalah unit harga.
+     * Plan yang menyebut warna brand lain menghasilkan target untuk piring yang
+     * tidak akan pernah dibuat di outlet ini — dan angkanya ikut ke dashboard.
+     *
+     * Dicek sebelum transaksi dibuka: tidak ada gunanya menulis separuh plan
+     * lalu membatalkannya.
+     */
+    private function assertPlateColorsBelongToOutletBrand(string $outletId, array $plans): void
+    {
+        $outletBrandId = $this->brandIdForOutlet($outletId);
+
+        if ($outletBrandId === null) {
+            return;
+        }
+
+        $plateColorIds = collect($plans)
+            ->flatMap(fn ($plan) => collect($plan['items'] ?? [])->pluck('plateColorId'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($plateColorIds->isEmpty()) {
+            return;
+        }
+
+        // Warna ber-brand_id NULL sengaja lolos — sama seperti di POSService.
+        $foreign = PlateColors::whereIn('id', $plateColorIds)
+            ->whereNotNull('brand_id')
+            ->where('brand_id', '!=', $outletBrandId)
+            ->pluck('platename');
+
+        if ($foreign->isNotEmpty()) {
+            throw new BusinessRuleException(
+                'Plan memuat warna piring dari brand lain: ' . $foreign->implode(', ') . '.'
+            );
+        }
     }
 }

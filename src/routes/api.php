@@ -28,7 +28,13 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 
-Route::post('/register', [AuthController::class, 'register']);
+// TIDAK publik. `register` menerima `role` dan `module_app` dari payload, jadi
+// selama route ini terbuka siapa pun bisa mendaftarkan dirinya sebagai admin —
+// dan semua middleware `role:admin` di bawah menjadi tidak ada artinya.
+// Pembuatan user sehari-hari lewat `/users` (UserController); route ini tinggal
+// sebagai jalur register yang langsung mengembalikan token.
+Route::post('/register', [AuthController::class, 'register'])
+    ->middleware(['auth:api', 'role:admin']);
 Route::post('/login', [AuthController::class, 'login']);
 // Tighter than the global 60/min: a 6-digit PIN is guessable, so brute force is
 // the realistic attack here. Not tighter than 20 though — the limit is keyed by
@@ -57,6 +63,7 @@ Route::prefix('master')
             Route::crud('menu', MasterController::class, 'menu');
             Route::crud('outlet', MasterController::class, 'outlet');
             Route::crud('waste-reason', MasterController::class, 'wastereason');
+            Route::crud('brand', MasterController::class, 'brand');
 
         });
 
@@ -66,6 +73,10 @@ Route::prefix('master')
             Route::get('/menu', [MasterController::class, 'menuindex']);
             Route::get('/outlet', [MasterController::class, 'outletindex']);
             Route::get('/waste-reason', [MasterController::class, 'wastereasonindex']);
+            // Dapur perlu baca brand untuk menyaring menu (Fase 4), jadi read
+            // dibuka ke role yang sama dengan master lain sejak sekarang.
+            Route::get('/brand', [MasterController::class, 'brandindex']);
+            Route::get('/brand/{id}', [MasterController::class, 'brandshow']);
 
         });
 
@@ -97,6 +108,7 @@ Route::prefix('production')->middleware('auth:api')->group(function () {
     Route::post('/produce', [ProductionController::class, 'produce']);
     Route::post('/mark-sold', [ProductionController::class, 'markSold']);
     Route::post('/mark-waste', [ProductionController::class, 'markWaste']);
+    Route::post('/close-day', [ProductionController::class, 'closeDay']);
 
     
     Route::get('/expired', [ProductionController::class, 'expired']);

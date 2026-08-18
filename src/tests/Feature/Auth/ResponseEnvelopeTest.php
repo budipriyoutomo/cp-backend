@@ -109,12 +109,15 @@ class ResponseEnvelopeTest extends TestCase
     public function test_validation_failures_use_the_standard_error_envelope(): void
     {
         // Two different FormRequest base classes produce this; both must match.
+        // `/register` is admin-only now, so the guard has to be satisfied first
+        // or the 401 lands before validation ever runs.
+        $this->actingAsRole('admin');
+
         $this->postJson('/api/register', [])
             ->assertStatus(422)
             ->assertJsonPath('status', false)
             ->assertJsonMissingPath('success');
 
-        $this->actingAsRole('admin');
         $this->postJson('/api/production/produce', [])
             ->assertStatus(422)
             ->assertJsonPath('status', false)

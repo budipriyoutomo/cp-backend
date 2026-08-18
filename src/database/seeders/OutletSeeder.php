@@ -2,8 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\Brand;
 use App\Models\Outlet;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 /**
  * Outlets come from the environment, not from a hardcoded list — the outlet
@@ -45,10 +47,63 @@ class OutletSeeder extends Seeder
 
             Outlet::updateOrCreate(
                 ['code' => $code],
-                ['name' => $name, 'brand' => $brand, 'is_active' => true]
+                [
+                    'name'      => $name,
+                    'brand'     => $brand,
+                    'brand_id'  => $this->brandIdFor($brand),
+                    'is_active' => true,
+                ]
             );
 
             $this->command?->info("Outlet siap: {$code} — {$name}");
         }
+    }
+
+    /**
+     * Nama brand dicocokkan case-insensitive supaya "Maharasa" di
+     * BOOTSTRAP_OUTLETS dan "maharasa" di BOOTSTRAP_BRANDS tidak menghasilkan
+     * dua baris brand. Kalau belum ada, dibuat — seeder ini tidak boleh
+     * meninggalkan outlet tanpa brand.
+     */
+    private function brandIdFor(string $name): ?string
+    {
+        $name = trim($name);
+
+        if ($name === '') {
+            return null;
+        }
+
+        $existing = Brand::whereRaw('LOWER(TRIM(name)) = ?', [Str::lower($name)])->first();
+
+        if ($existing) {
+            return $existing->id;
+        }
+
+        return Brand::create([
+            'code'      => $this->uniqueCodeFor($name),
+            'name'      => $name,
+            'is_active' => true,
+        ])->id;
+    }
+
+    /**
+     * `brands.code` unik, sementara nama brand bebas — "Maha Rasa" dan
+     * "Maharasa" menghasilkan kode yang sama. Beri akhiran angka kalau bentrok,
+     * jangan biarkan seeder mati di tengah jalan.
+     */
+    private function uniqueCodeFor(string $name): string
+    {
+        $base = Str::upper(preg_replace('/[^A-Za-z0-9]/', '', $name));
+        $base = $base === '' ? 'BRAND' : Str::substr($base, 0, 40);
+
+        $code = $base;
+        $suffix = 1;
+
+        while (Brand::where('code', $code)->exists()) {
+            $code = $base . '-' . $suffix;
+            $suffix++;
+        }
+
+        return $code;
     }
 }

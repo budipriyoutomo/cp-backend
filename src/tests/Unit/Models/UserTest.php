@@ -22,7 +22,7 @@ class UserTest extends TestCase
             'role'       => 'admin',
             'departemen' => 'Operation',
             'outlet'     => ['bandung'],
-            'module_app' => ['cmms'],
+            'module_app' => ['app', 'admin'],
             'pin'        => '123456',
         ]);
 
@@ -31,7 +31,7 @@ class UserTest extends TestCase
         $this->assertSame('admin', $claims['role']);
         $this->assertSame('Operation', $claims['departemen']);
         $this->assertSame(['bandung'], $claims['outlet']);
-        $this->assertSame(['cmms'], $claims['module_app']);
+        $this->assertSame(['app', 'admin'], $claims['module_app']);
 
         // The PIN must never ride along: a JWT payload is base64, not encrypted.
         $this->assertArrayNotHasKey('pin', $claims);
@@ -69,11 +69,11 @@ class UserTest extends TestCase
     {
         $user = new User();
         $user->outlet = ['bandung', 'jakarta'];
-        $user->module_app = ['cmms', 'pos'];
+        $user->module_app = ['kitchen', 'report'];
 
         // Round-trip through the attribute casting layer.
         $this->assertSame(['bandung', 'jakarta'], $user->outlet);
-        $this->assertSame(['cmms', 'pos'], $user->module_app);
+        $this->assertSame(['kitchen', 'report'], $user->module_app);
 
         // The raw stored value should be JSON encoded.
         $this->assertJson($user->getAttributes()['outlet']);

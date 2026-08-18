@@ -20,6 +20,7 @@ class BootstrapSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            BrandSeeder::class,
             PlateColorSeeder::class,
             MenuSeeder::class,
             WasteReasonSeeder::class,

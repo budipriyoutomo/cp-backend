@@ -46,6 +46,9 @@ Query builder generik yang menerima `Request`:
 
 Subclass cukup mendeklarasikan `$model`, `$relations`, `$searchable`, `$sortable`. `delete()` otomatis men-set `is_active = 0` sebelum soft delete bila kolomnya ada.
 
+### `Services\Concerns\ResolvesOutletBrand`
+Satu outlet melayani satu brand, jadi pemanggil cukup tahu outlet. Trait ini memegang aturan penyaringannya di satu tempat — dipakai `MenuService`, `PlateColorService`, `ProductionDashboardService`, `ProductionItemService`, dan `ProductionPlanService`. Aturannya: baris milik brand outlet ikut, baris ber-`brand_id` NULL juga ikut, baris brand lain tidak. Outlet tanpa brand tidak menyaring apa pun. **Jangan tulis ulang aturan ini di service baru** — kalau ada dua versi, keduanya akan menyimpang pelan-pelan.
+
 ### `BaseAggregateService`
 Untuk agregat header+item (`ProductionPlan`+items, `SalesHeader`+items+details). Menyediakan `createItems()` / `syncItems()` yang bisa di-override — `SalesService` meng-override keduanya untuk menghitung ulang `selisih` dan mengelola level ketiga (`sales_item_details`).
 
@@ -146,7 +149,7 @@ Ketidakcocokan tipe `varchar` vs `uuid` ini muncul di beberapa tempat. `WasteAna
 ### `POSService` + `RabbitConsumePOSData`
 Worker AMQP jangka panjang: exchange `posdata_exchange` (direct), queue `posdata.queue`, routing key `posdata.created`. QoS prefetch 1, ack manual, nack tanpa requeue kalau gagal, reconnect loop 5 detik.
 
-`storeFromEvent()` memetakan payload berdasarkan **nama** — `platecolor` dicocokkan ke `plate_colors.platename`, `outlet` ke `outlets.code`, keduanya dinormalisasi (lowercase, strip non-alfanumerik, rapatkan spasi). Perilaku upsert: kalau (outlet, plate color, date) sudah ada, `sold` ditimpa.
+`storeFromEvent()` memetakan payload berdasarkan **nama**, tapi urutannya penting: **outlet diresolusi duluan**, lalu plate color dicari **di dalam brand outlet itu**. Sejak plate color jadi milik brand, nama warna saja tidak lagi menunjuk satu baris — pencarian global akan mengambil piring brand lain, dan yang salah adalah angka penjualan. Warna ber-`brand_id` NULL tetap diterima selama tidak ambigu (kelonggaran transisi); apa pun yang ambigu dilempar, tidak ditebak. `outlet` dicocokkan ke `outlets.code`, keduanya dinormalisasi (lowercase, strip non-alfanumerik, rapatkan spasi). Perilaku upsert: kalau (outlet, plate color, date) sudah ada, `sold` ditimpa.
 
 Kalau pemetaan gagal, payload diparkir ke tabel `failed_pos_messages` lalu di-ack — tidak hilang seperti dulu. Perbaiki master data, lalu `php artisan pos:replay-failed` (ada `--dry-run` dan `--id=`).
 

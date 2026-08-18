@@ -6,5 +6,6 @@ use App\Http\Resources\BaseResource;
 
 class WasteReasonResource extends BaseResource
 {
-    // Semua field otomatis lewat BaseResource
+    // Sisanya otomatis lewat BaseResource.
+    protected array $textFields = ['reason_name', 'description'];
 }

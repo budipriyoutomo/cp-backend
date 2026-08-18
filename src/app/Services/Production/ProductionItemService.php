@@ -7,11 +7,14 @@ use App\Models\Menu;
 use App\Models\WasteRecord;
 use App\Exceptions\BusinessRuleException;
 use App\Services\BaseService;
+use App\Services\Concerns\ResolvesOutletBrand;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ProductionItemService extends BaseService
 {
+    use ResolvesOutletBrand;
+
     protected string $model = ProductionItem::class;
 
     protected array $relations = ['menu'];
@@ -33,6 +36,8 @@ class ProductionItemService extends BaseService
             if (!$menu->plateColor?->id) {
                 throw new \Exception("Menu belum memiliki plate color yang valid");
             }
+
+            $this->assertMenuBelongsToOutletBrand($menu, $data['outletId']);
 
             $now = now();
             $expiresAt = $now->copy()->addMinutes($menu->shelf_life ?? 60);
@@ -56,6 +61,30 @@ class ProductionItemService extends BaseService
 
             return $items->values();
         });
+    }
+
+    /**
+     * Piring yang diproduksi menyimpan `plate_color` milik menunya, dan warna
+     * itulah unit harganya. Memproduksi menu brand lain di outlet ini berarti
+     * memasukkan harga brand lain ke rekonsiliasi hari itu — kesalahan yang
+     * baru ketahuan saat closing report tidak balance.
+     *
+     * Kelonggarannya sama dengan POSService: kalau salah satu sisi belum punya
+     * brand (data transisi), tidak ada yang bisa dibandingkan, jadi dibiarkan.
+     */
+    private function assertMenuBelongsToOutletBrand(Menu $menu, string $outletId): void
+    {
+        $outletBrandId = $this->brandIdForOutlet($outletId);
+
+        if ($outletBrandId === null || $menu->brand_id === null) {
+            return;
+        }
+
+        if ($menu->brand_id !== $outletBrandId) {
+            throw new BusinessRuleException(
+                "Menu '{$menu->menuname}' bukan milik brand outlet ini dan tidak bisa diproduksi di sini."
+            );
+        }
     }
 
     /*
@@ -190,6 +219,28 @@ class ProductionItemService extends BaseService
             ->update([
                 'final_status' => 'waste',
                 'wasted_at' => now(),
+            ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CLOSE DAY (sisa plate dianggap terjual)
+    |--------------------------------------------------------------------------
+    | Operator hanya menandai waste per plate. Saat menutup hari, semua plate
+    | hari ini yang belum difinalisasi diperlakukan sebagai terjual.
+    | Sengaja dibatasi ke hari produksi berjalan: hari sebelumnya sudah ditutup
+    | sebagai waste oleh autoWasteCarryOver(), dan laporan lama tidak boleh
+    | berubah karena aksi hari ini.
+    */
+    public function closeDaySold(string $outletId): int
+    {
+        return $this->query()
+            ->where('outlet_id', $outletId)
+            ->whereNull('final_status')
+            ->whereDate('produced_at', today())
+            ->update([
+                'final_status' => 'sold',
+                'sold_at'      => now(),
             ]);
     }
 

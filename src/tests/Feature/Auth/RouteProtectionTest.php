@@ -29,6 +29,16 @@ class RouteProtectionTest extends TestCase
     public static function guardedRoutes(): array
     {
         return [
+            // auth — `register` menetapkan role & module_app dari payload, jadi
+            // membiarkannya publik membatalkan semua middleware `role:` di bawah.
+            'POST /register'                 => ['post', '/api/register'],
+
+            // users
+            'GET /users'                     => ['get', '/api/users'],
+            'POST /users'                    => ['post', '/api/users'],
+            'PUT /users/{id}'                => ['put', '/api/users/1'],
+            'DELETE /users/{id}'             => ['delete', '/api/users/1'],
+
             // production
             'GET /production/stats'          => ['get', '/api/production/stats'],
             'GET /production/plan'           => ['get', '/api/production/plan'],
@@ -37,6 +47,7 @@ class RouteProtectionTest extends TestCase
             'POST /production/produce'       => ['post', '/api/production/produce'],
             'POST /production/mark-sold'     => ['post', '/api/production/mark-sold'],
             'POST /production/mark-waste'    => ['post', '/api/production/mark-waste'],
+            'POST /production/close-day'     => ['post', '/api/production/close-day'],
             'GET /production/expired'        => ['get', '/api/production/expired'],
             'PUT /production/expired/{id}'   => ['put', '/api/production/expired/some-id'],
             'POST /production/waste'         => ['post', '/api/production/waste'],

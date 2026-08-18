@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Support\AccessOptions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class RegisterRequest extends FormRequest
 {
@@ -27,10 +29,12 @@ class RegisterRequest extends FormRequest
             'name'       => 'required|string|max:255',
             'email'      => 'required|string|email|max:255|unique:users',
             'password'   => 'required|string|min:6|confirmed',
-            'role'       => 'required|string',
-            'departemen' => 'required|string',
-            'outlet'     => 'required|array|min:1',
-            'module_app' => 'required|array|min:1',
+            'role'         => ['required', 'string', Rule::in(AccessOptions::ROLES)],
+            'departemen'   => 'required|string',
+            'outlet'       => 'required|array|min:1',
+            'outlet.*'     => ['string', 'max:50'],
+            'module_app'   => 'required|array|min:1',
+            'module_app.*' => ['string', Rule::in(AccessOptions::MODULE_APPS)],
         ];
     }
 
@@ -44,6 +48,7 @@ class RegisterRequest extends FormRequest
             'password.confirmed' => 'Konfirmasi password tidak cocok.',
             'role.required' => 'Role wajib dipilih.',
             'role.in' => 'Role tidak valid.',
+            'module_app.*.in' => 'Module app tidak valid.',
             'departemen.required' => 'Departemen wajib diisi.',
             'outlet.required' => 'Outlet wajib diisi.',
             'outlet.array' => 'Outlet harus berupa array.',

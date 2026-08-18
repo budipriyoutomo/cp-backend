@@ -32,6 +32,21 @@ class DailySummaryResource extends BaseResource
     ];
 
     /**
+     * Resource ini memanggil `formatValue()` langsung per-field, jadi daftar ini
+     * yang menjaganya — bukan `autoDetect()`.
+     *
+     * `plateColorName` adalah yang nyata: warna piring bernama angka akan
+     * dikirim sebagai number, dan laporan harian menampilkannya sebagai teks.
+     * `date` sengaja TIDAK di sini — ia bergantung pada cabang `isDate()`.
+     */
+    protected array $textFields = [
+        'outletId',
+        'outletName',
+        'plateColorId',
+        'plateColorName',
+    ];
+
+    /**
      * Transform resource
      */
     public function toArray($request): array

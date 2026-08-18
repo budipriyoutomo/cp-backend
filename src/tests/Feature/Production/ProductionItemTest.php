@@ -307,4 +307,70 @@ class ProductionItemTest extends TestCase
         $this->postJson('/api/production/remove-expired', ['itemIds' => []])
             ->assertNotFound();
     }
+
+    public function test_close_day_marks_remaining_items_as_sold(): void
+    {
+        $outlet    = $this->createOutlet();
+        $menu      = $this->createMenu();
+        $pending   = $this->createProductionItem($outlet, $menu);
+        $alreadyWasted = $this->createProductionItem($outlet, $menu, [
+            'final_status' => 'waste',
+            'wasted_at'    => now(),
+        ]);
+
+        $this->postJson('/api/production/close-day', ['outletId' => $outlet->id])
+            ->assertOk()
+            ->assertJsonPath('data.closed', 1);
+
+        $pending->refresh();
+        $this->assertSame('sold', $pending->final_status);
+        $this->assertNotNull($pending->sold_at);
+
+        // Plate yang sudah dibuang tidak boleh berubah jadi terjual.
+        $alreadyWasted->refresh();
+        $this->assertSame('waste', $alreadyWasted->final_status);
+        $this->assertNull($alreadyWasted->sold_at);
+    }
+
+    public function test_close_day_leaves_previous_day_items_untouched(): void
+    {
+        $outlet = $this->createOutlet();
+        $menu   = $this->createMenu();
+        $stale  = $this->createProductionItem($outlet, $menu, [
+            'produced_at' => now()->subDay(),
+            'expires_at'  => now()->subDay()->addHour(),
+        ]);
+
+        $this->postJson('/api/production/close-day', ['outletId' => $outlet->id])
+            ->assertOk()
+            ->assertJsonPath('data.closed', 0);
+
+        // Hari kemarin ditutup oleh autoWasteCarryOver(), bukan oleh close-day.
+        $stale->refresh();
+        $this->assertNull($stale->final_status);
+    }
+
+    public function test_close_day_is_scoped_to_one_outlet(): void
+    {
+        $outlet      = $this->createOutlet();
+        $otherOutlet = $this->createOutlet(['code' => 'JKT', 'name' => 'Jakarta']);
+        $menu        = $this->createMenu();
+
+        $mine    = $this->createProductionItem($outlet, $menu);
+        $theirs  = $this->createProductionItem($otherOutlet, $menu);
+
+        $this->postJson('/api/production/close-day', ['outletId' => $outlet->id])
+            ->assertOk()
+            ->assertJsonPath('data.closed', 1);
+
+        $this->assertSame('sold', $mine->refresh()->final_status);
+        $this->assertNull($theirs->refresh()->final_status);
+    }
+
+    public function test_close_day_validates_outlet(): void
+    {
+        $this->postJson('/api/production/close-day', [])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['outletId']);
+    }
 }

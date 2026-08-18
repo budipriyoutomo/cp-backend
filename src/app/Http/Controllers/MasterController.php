@@ -10,6 +10,8 @@ use App\Http\Requests\Master\OutletRequest;
 use App\Http\Resources\Master\OutletResource;
 use App\Http\Requests\Master\WasteReasonRequest;
 use App\Http\Resources\Master\WasteReasonResource;
+use App\Http\Requests\Master\BrandRequest;
+use App\Http\Resources\Master\BrandResource;
 
 
 use App\Services\MasterService;
@@ -65,10 +67,14 @@ class MasterController extends BaseApiController
     // ======================================================
 
     public function menuindex(Request $request)
-    {  
-        $request->merge([
-            'is_active' => 1
-        ]);
+    {
+        // BaseService membaca filter dari $request->query(). merge() menulis ke
+        // "input source", dan untuk request dengan Content-Type application/json
+        // itu bag JSON — bukan bag query. Jadi filter ini diam-diam tidak
+        // berlaku persis pada klien yang mengirim header tersebut. Tulis
+        // langsung ke bag yang benar-benar dibaca.
+        $request->query->set('is_active', 1);
+
        return $this->resource(
             MenuResource::collection($this->service->menu->all($request))
         ); 
@@ -144,6 +150,60 @@ class MasterController extends BaseApiController
     {
         $this->service->outlet->delete($id);
         return $this->success(null, 'Outlet deleted');
+    }
+
+    // ======================================================
+    // BRAND METHODS
+    // ======================================================
+
+    public function brandindex(Request $request)
+    {
+        return $this->resource(
+            BrandResource::collection($this->service->brand->list($request))
+        );
+    }
+
+    /**
+     * Master lain belum punya show(), padahal Route::crud sudah mendaftarkan
+     * GET /{id} untuk semuanya — jadi endpoint itu 500 di platecolor/menu/
+     * outlet/waste-reason. Brand tidak ikut mewarisi lubang itu.
+     */
+    public function brandshow($id)
+    {
+        $brand = $this->service->brand->find($id);
+
+        if (!$brand) {
+            return $this->error('Brand not found', 404);
+        }
+
+        return $this->resource(new BrandResource($brand));
+    }
+
+    public function brandstore(BrandRequest $request)
+    {
+        return $this->resource(
+            new BrandResource(
+                $this->service->brand->create($request->validated())
+            ),
+            'Brand created',
+            201
+        );
+    }
+
+    public function brandupdate(BrandRequest $request, $id)
+    {
+        return $this->resource(
+            new BrandResource(
+                $this->service->brand->update($id, $request->validated())
+            ),
+            'Brand updated'
+        );
+    }
+
+    public function branddestroy($id)
+    {
+        $this->service->brand->delete($id);
+        return $this->success(null, 'Brand deleted');
     }
 
     // ======================================================

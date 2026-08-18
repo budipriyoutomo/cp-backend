@@ -116,7 +116,16 @@ class MenuSeeder extends Seeder
 
     public function run(): void
     {
-        $plateMap = PlateColors::pluck('id', 'platename')->all();
+        $brandId = BrandSeeder::soleBrandId();
+        BrandSeeder::warnIfAmbiguous($this, 'Menu');
+
+        // Warna dicari di dalam brand yang sama. Dua brand boleh sama-sama punya
+        // "WHITE" dengan harga berbeda, jadi peta global akan menempelkan menu
+        // ke piring brand lain — tanpa error, hanya harga yang salah.
+        $plateMap = PlateColors::query()
+            ->where('brand_id', $brandId)
+            ->pluck('id', 'platename')
+            ->all();
 
         $skipped = 0;
 
@@ -130,12 +139,15 @@ class MenuSeeder extends Seeder
                 continue;
             }
 
-            $menu = Menu::firstOrNew(['code' => $code]);
+            // `brand_id` ikut jadi kunci pencocokan: kode menu unik di dalam
+            // brand, bukan global.
+            $menu = Menu::firstOrNew(['code' => $code, 'brand_id' => $brandId]);
 
             $menu->fill([
                 'menuname'       => $name,
                 'price'          => $price,
                 'plate_color_id' => $plateMap[$plate],
+                'brand_id'       => $brandId,
                 'shelf_life'     => self::SHELF_LIFE_MINUTES,
                 'is_active'      => true,
             ]);

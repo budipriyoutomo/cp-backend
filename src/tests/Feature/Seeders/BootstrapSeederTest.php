@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Seeders;
 
+use App\Models\Brand;
 use App\Models\Menu;
 use App\Models\Outlet;
 use App\Models\PlateColors;
@@ -9,6 +10,7 @@ use App\Models\User;
 use App\Models\WasteReason;
 use Database\Seeders\AdminUserSeeder;
 use Database\Seeders\BootstrapSeeder;
+use Database\Seeders\BrandSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\OutletSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,7 +36,7 @@ class BootstrapSeederTest extends TestCase
 
     private function clearBootstrapEnv(): void
     {
-        foreach (['BOOTSTRAP_OUTLETS', 'BOOTSTRAP_ADMIN_EMAIL', 'BOOTSTRAP_ADMIN_PASSWORD', 'BOOTSTRAP_ADMIN_NAME'] as $key) {
+        foreach (['BOOTSTRAP_BRANDS', 'BOOTSTRAP_OUTLETS', 'BOOTSTRAP_ADMIN_EMAIL', 'BOOTSTRAP_ADMIN_PASSWORD', 'BOOTSTRAP_ADMIN_NAME'] as $key) {
             putenv($key);
             unset($_ENV[$key]);
         }
@@ -138,6 +140,101 @@ class BootstrapSeederTest extends TestCase
         $this->seed(OutletSeeder::class);
 
         $this->assertSame(0, Outlet::count());
+    }
+
+    /**
+     * Sengaja tidak menghitung outlet: assertion-nya harus tetap berlaku
+     * berapa pun isi BOOTSTRAP_OUTLETS. Yang dijaga adalah invarian Fase 2 —
+     * seeder tidak boleh meninggalkan satu pun outlet tanpa brand.
+     */
+    public function test_the_outlet_seeder_links_every_outlet_to_a_brand(): void
+    {
+        $this->withBootstrapEnv(['BOOTSTRAP_OUTLETS' => 'BDG:Bandung:Maharasa']);
+
+        $this->seed(OutletSeeder::class);
+
+        $this->assertGreaterThan(0, Outlet::count());
+        $this->assertSame(0, Outlet::whereNull('brand_id')->count());
+    }
+
+    public function test_the_brand_seeder_reads_its_list_from_the_environment(): void
+    {
+        $this->withBootstrapEnv(['BOOTSTRAP_BRANDS' => 'MHR:Maharasa,KTR:Katsuri']);
+
+        $this->seed(BrandSeeder::class);
+
+        $this->assertSame(2, Brand::count());
+        $this->assertDatabaseHas('brands', ['code' => 'MHR', 'name' => 'Maharasa']);
+    }
+
+    public function test_the_brand_seeder_keeps_ids_stable_across_runs(): void
+    {
+        // Mulai Fase 2 ada FK yang menunjuk ke brands. Kalau seeder menulis
+        // ulang primary key saat dijalankan ulang, FK itu putus diam-diam.
+        $this->withBootstrapEnv(['BOOTSTRAP_BRANDS' => 'MHR:Maharasa']);
+
+        $this->seed(BrandSeeder::class);
+        $id = Brand::firstOrFail()->id;
+
+        $this->seed(BrandSeeder::class);
+
+        $this->assertSame(1, Brand::count());
+        $this->assertSame($id, Brand::firstOrFail()->id);
+    }
+
+    /**
+     * Lubang yang gampang terlewat: BrandSeeder membuat brand, lalu
+     * PlateColorSeeder dan MenuSeeder mengisi master TANPA menempelkannya ke
+     * brand itu. Instalasi baru jadi punya brand tapi seluruh master-nya tanpa
+     * brand — jalan, tapi bukan itu yang dimaksud.
+     */
+    public function test_bootstrap_attaches_the_seeded_master_data_to_the_sole_brand(): void
+    {
+        $this->withBootstrapEnv([
+            'BOOTSTRAP_BRANDS'         => 'MHR:Maharasa',
+            'BOOTSTRAP_OUTLETS'        => 'BDG:Bandung:Maharasa',
+            'BOOTSTRAP_ADMIN_EMAIL'    => 'admin@example.com',
+            'BOOTSTRAP_ADMIN_PASSWORD' => 'rahasia-panjang',
+        ]);
+
+        $this->seed(BootstrapSeeder::class);
+
+        $brandId = Brand::where('code', 'MHR')->value('id');
+
+        $this->assertGreaterThan(0, PlateColors::count());
+        $this->assertGreaterThan(0, Menu::count());
+        $this->assertSame(0, PlateColors::whereNull('brand_id')->count());
+        $this->assertSame(0, Menu::whereNull('brand_id')->count());
+        $this->assertSame(0, PlateColors::where('brand_id', '!=', $brandId)->count());
+    }
+
+    public function test_menus_are_wired_to_plate_colours_of_their_own_brand(): void
+    {
+        $this->withBootstrapEnv([
+            'BOOTSTRAP_BRANDS'         => 'MHR:Maharasa',
+            'BOOTSTRAP_ADMIN_EMAIL'    => 'admin@example.com',
+            'BOOTSTRAP_ADMIN_PASSWORD' => 'rahasia-panjang',
+        ]);
+
+        $this->seed(BootstrapSeeder::class);
+
+        // Menu yang menunjuk warna brand lain adalah harga yang salah, dan
+        // ProductionItemService akan menolaknya saat diproduksi.
+        $mismatched = Menu::query()
+            ->join('plate_colors', 'plate_colors.id', '=', 'menus.plate_color_id')
+            ->whereColumn('plate_colors.brand_id', '!=', 'menus.brand_id')
+            ->count();
+
+        $this->assertSame(0, $mismatched);
+    }
+
+    public function test_the_brand_seeder_skips_quietly_when_unconfigured(): void
+    {
+        $this->clearBootstrapEnv();
+
+        $this->seed(BrandSeeder::class);
+
+        $this->assertSame(0, Brand::count());
     }
 
     public function test_the_demo_seeder_refuses_to_run_outside_local(): void

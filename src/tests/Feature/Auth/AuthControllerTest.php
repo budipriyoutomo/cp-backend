@@ -20,13 +20,97 @@ class AuthControllerTest extends TestCase
             'role'       => 'admin',
             'departemen' => 'Operation',
             'outlet'     => ['bandung'],
-            'module_app' => ['cmms'],
+            'module_app' => ['app', 'admin'],
             'pin'        => '654321',
         ], $overrides));
     }
 
+    /**
+     * `/register` bukan lagi route publik — ia membuat user dengan `role` dan
+     * `module_app` dari payload, jadi harus dijaga seperti user management.
+     */
+    private function actingAsAdmin(): User
+    {
+        $admin = $this->createUser(['email' => 'admin+register@example.com']);
+
+        $this->actingAs($admin, 'api');
+
+        return $admin;
+    }
+
+    public function test_register_is_closed_to_guests(): void
+    {
+        $this->postJson('/api/register', [
+            'name'                  => 'Penyusup',
+            'email'                 => 'penyusup@example.com',
+            'password'              => 'secret123',
+            'password_confirmation' => 'secret123',
+            'role'                  => 'admin',
+            'departemen'            => 'Operation',
+            'outlet'                => ['bandung'],
+            'module_app'            => ['admin'],
+        ])->assertStatus(401);
+
+        $this->assertDatabaseMissing('users', ['email' => 'penyusup@example.com']);
+    }
+
+    public function test_register_is_closed_to_non_admin_roles(): void
+    {
+        $this->actingAs($this->createUser([
+            'email' => 'kitchen@example.com',
+            'role'  => 'kitchen',
+        ]), 'api');
+
+        $this->postJson('/api/register', [
+            'name'                  => 'Penyusup',
+            'email'                 => 'penyusup2@example.com',
+            'password'              => 'secret123',
+            'password_confirmation' => 'secret123',
+            'role'                  => 'admin',
+            'departemen'            => 'Operation',
+            'outlet'                => ['bandung'],
+            'module_app'            => ['admin'],
+        ])->assertStatus(403);
+
+        $this->assertDatabaseMissing('users', ['email' => 'penyusup2@example.com']);
+    }
+
+    public function test_register_rejects_unknown_role(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->postJson('/api/register', [
+            'name'                  => 'Jane',
+            'email'                 => 'jane3@example.com',
+            'password'              => 'secret123',
+            'password_confirmation' => 'secret123',
+            'role'                  => 'superuser',
+            'departemen'            => 'Operation',
+            'outlet'                => ['bandung'],
+            'module_app'            => ['kitchen'],
+        ])->assertStatus(422)->assertJsonValidationErrors(['role']);
+    }
+
+    public function test_register_rejects_unknown_module_app(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->postJson('/api/register', [
+            'name'                  => 'Jane',
+            'email'                 => 'jane4@example.com',
+            'password'              => 'secret123',
+            'password_confirmation' => 'secret123',
+            'role'                  => 'kitchen',
+            'departemen'            => 'Operation',
+            'outlet'                => ['bandung'],
+            'module_app'            => ['cmms'],
+        ])->assertStatus(422)->assertJsonValidationErrors(['module_app.0']);
+    }
+
     public function test_register_creates_user_and_returns_token(): void
     {
+        $this->actingAsAdmin();
+
         $response = $this->postJson('/api/register', [
             'name'                  => 'Jane',
             'email'                 => 'jane@example.com',
@@ -35,7 +119,7 @@ class AuthControllerTest extends TestCase
             'role'                  => 'kitchen',
             'departemen'            => 'Operation',
             'outlet'                => ['bandung'],
-            'module_app'            => ['pos'],
+            'module_app'            => ['kitchen'],
         ]);
 
         $response->assertCreated()
@@ -48,6 +132,8 @@ class AuthControllerTest extends TestCase
 
     public function test_register_validates_required_fields(): void
     {
+        $this->actingAsAdmin();
+
         $response = $this->postJson('/api/register', []);
 
         $response->assertStatus(422)
@@ -57,6 +143,8 @@ class AuthControllerTest extends TestCase
 
     public function test_register_rejects_unconfirmed_password(): void
     {
+        $this->actingAsAdmin();
+
         $response = $this->postJson('/api/register', [
             'name'                  => 'Jane',
             'email'                 => 'jane2@example.com',
@@ -65,7 +153,7 @@ class AuthControllerTest extends TestCase
             'role'                  => 'kitchen',
             'departemen'            => 'Operation',
             'outlet'                => ['bandung'],
-            'module_app'            => ['pos'],
+            'module_app'            => ['kitchen'],
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors(['password']);

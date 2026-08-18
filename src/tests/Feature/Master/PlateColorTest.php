@@ -20,7 +20,7 @@ class PlateColorTest extends TestCase
             'role'       => $role,
             'departemen' => 'Operation',
             'outlet'     => ['bandung'],
-            'module_app' => ['cmms'],
+            'module_app' => ['app', 'admin'],
         ]);
     }
 

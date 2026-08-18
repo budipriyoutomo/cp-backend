@@ -16,6 +16,7 @@ class Menu extends BaseModel
         'price',
         'shelf_life',
         'plate_color_id',
+        'brand_id',
         'is_active'
     ];
 
@@ -30,6 +31,11 @@ class Menu extends BaseModel
     public function plateColor()
     {
         return $this->belongsTo(PlateColors::class, 'plate_color_id');
+    }
+
+    public function brand()
+    {
+        return $this->belongsTo(Brand::class, 'brand_id');
     }
 
     public function getImageUrlAttribute()

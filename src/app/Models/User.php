@@ -105,12 +105,4 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 
-    public function scopeAdminOperationCmms($query,$outlet)
-    {
-        return $query->where('role', 'admin')
-            ->where('departemen', 'Operation')
-            ->whereJsonContains('outlet', strtolower($outlet)) 
-            ->whereJsonContains('module_app', 'cmms');
-    }
-
 }

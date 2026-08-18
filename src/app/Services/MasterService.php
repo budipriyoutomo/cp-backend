@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Master\BrandService;
 use App\Services\Master\PlateColorService;
 use App\Services\Master\MenuService;
 use App\Services\Master\OutletService;
@@ -13,6 +14,7 @@ class MasterService
         public PlateColorService $plateColor,
         public MenuService $menu,
         public OutletService $outlet,
-        public WasteReasonService $wasteReason
+        public WasteReasonService $wasteReason,
+        public BrandService $brand
     ) {}
 }

@@ -10,6 +10,9 @@ class PlateColorSeeder extends Seeder
 {
     public function run(): void
     {
+        $brandId = BrandSeeder::soleBrandId();
+        BrandSeeder::warnIfAmbiguous($this, 'Plate color');
+
         $data = [
             ['WHITE', 23000],
             ['BLUE', 30000],
@@ -27,8 +30,13 @@ class PlateColorSeeder extends Seeder
             // second run tried to rewrite the primary key of an existing row
             // and broke the foreign keys pointing at it. HasUuid assigns the id
             // on create; on update the row keeps the one it already has.
+            //
+            // `brand_id` ikut jadi kunci pencocokan, bukan cuma nilai yang
+            // ditulis. Tanpa itu, dijalankan ulang di basis data dua-brand akan
+            // menemukan "WHITE" milik brand mana pun yang kebetulan lebih dulu
+            // lalu menimpa harganya.
             PlateColors::updateOrCreate(
-                ['platename' => $name],
+                ['platename' => $name, 'brand_id' => $brandId],
                 [
                     'price' => $price,
                     'description' => $name . ' plate',

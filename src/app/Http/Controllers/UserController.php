@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\BusinessRuleException;
 use App\Http\Resources\UserManagementResource;
 use App\Models\User;
+use App\Support\AccessOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -37,11 +38,13 @@ class UserController extends BaseApiController
             'name'       => ['required', 'string', 'max:255'],
             'email'      => ['required', 'email', 'max:255', 'unique:users,email'],
             'password'   => ['required', 'string', 'min:6'],
-            'role'       => ['required', 'string', 'max:50'],
+            'role'       => ['required', 'string', Rule::in(AccessOptions::ROLES)],
             'pin'        => ['nullable', 'string', 'min:6', 'max:10', $this->uniquePinRule()],
             'departemen' => ['nullable', 'string', 'max:255'],
             'outlet'     => ['nullable', 'array'],
-            'module_app' => ['nullable', 'array'],
+            'outlet.*'   => ['string', 'max:50'],
+            'module_app'   => ['nullable', 'array'],
+            'module_app.*' => ['string', Rule::in(AccessOptions::MODULE_APPS)],
         ]);
 
         $data['password'] = Hash::make($data['password']);
@@ -62,11 +65,13 @@ class UserController extends BaseApiController
             'name'       => ['sometimes', 'string', 'max:255'],
             'email'      => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password'   => ['nullable', 'string', 'min:6'],
-            'role'       => ['sometimes', 'string', 'max:50'],
+            'role'       => ['sometimes', 'string', Rule::in(AccessOptions::ROLES)],
             'pin'        => ['nullable', 'string', 'min:6', 'max:10', $this->uniquePinRule($user->id)],
             'departemen' => ['nullable', 'string', 'max:255'],
             'outlet'     => ['nullable', 'array'],
-            'module_app' => ['nullable', 'array'],
+            'outlet.*'   => ['string', 'max:50'],
+            'module_app'   => ['nullable', 'array'],
+            'module_app.*' => ['string', Rule::in(AccessOptions::MODULE_APPS)],
         ]);
 
         // Only update the password when a new one is supplied.

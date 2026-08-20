@@ -24,7 +24,11 @@ use RuntimeException;
 class StaffUserSeeder extends Seeder
 {
     /**
-     * [nama, email, password, pin, role, outlet]
+     * [nama, email, password, pin, module_app, outlet]
+     *
+     * Kolom kelima dulu `role`. Sejak role `service` dihapus semua staf dapur
+     * ber-role `kitchen`, jadi yang tersisa membedakan mereka cuma `module_app`
+     * — dan itulah yang disimpan di sini.
      *
      * `departemen` = Operation untuk semua baris, lihat DEPARTEMEN di bawah.
      */
@@ -44,14 +48,13 @@ class StaffUserSeeder extends Seeder
     private const DEPARTEMEN = 'Operation';
 
     /**
-     * `module_app` menentukan halaman frontend yang boleh dibuka.
-     * `app/kitchen/layout.tsx` menerima modul 'kitchen' maupun 'service', dan
-     * keduanya memang cuma butuh layar conveyor/produce/expired.
+     * Semua staf dapur memakai role yang sama.
+     *
+     * Role `service` dulu dipisah, tapi izinnya di server persis sama dengan
+     * `kitchen` — keduanya hanya boleh membaca master — jadi pemisahannya tidak
+     * pernah menjaga apa pun. Pembagian tugasnya sekarang lewat `module_app`.
      */
-    private const MODULES = [
-        'kitchen' => ['kitchen'],
-        'service' => ['service'],
-    ];
+    private const ROLE = 'kitchen';
 
     public function run(): void
     {
@@ -70,7 +73,7 @@ class StaffUserSeeder extends Seeder
         $created = 0;
         $skipped = 0;
 
-        foreach (self::STAFF as [$name, $email, $password, $pin, $role, $outlet]) {
+        foreach (self::STAFF as [$name, $email, $password, $pin, $module, $outlet]) {
             if (User::where('email', $email)->exists()) {
                 $this->command?->warn("Lewati {$email} — sudah ada, password & PIN tidak diubah.");
                 $skipped++;
@@ -92,14 +95,14 @@ class StaffUserSeeder extends Seeder
                 'email'      => $email,
                 'password'   => $password, // di-hash oleh cast 'hashed' di model
                 'pin'        => $pin,      // mutator mengisi bcrypt + pin_lookup
-                'role'       => $role,
+                'role'       => self::ROLE,
                 'departemen' => self::DEPARTEMEN,
                 'outlet'     => [$outlet],
-                'module_app' => self::MODULES[$role],
+                'module_app' => [$module],
             ]);
 
             $created++;
-            $this->command?->info("User dibuat: {$email} ({$role} @ {$outlet})");
+            $this->command?->info("User dibuat: {$email} ({$module} @ {$outlet})");
         }
 
         $this->command?->info("Selesai — {$created} dibuat, {$skipped} dilewati.");

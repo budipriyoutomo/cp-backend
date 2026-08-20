@@ -67,7 +67,7 @@ Route::prefix('master')
 
         });
 
-        Route::middleware('role:admin,kitchen,service')->group(function () {
+        Route::middleware('role:admin,kitchen')->group(function () {
 
             Route::get('/platecolor', [MasterController::class, 'platecolorindex']);
             Route::get('/menu', [MasterController::class, 'menuindex']);
@@ -75,6 +75,7 @@ Route::prefix('master')
             Route::get('/waste-reason', [MasterController::class, 'wastereasonindex']);
             // Dapur perlu baca brand untuk menyaring menu (Fase 4), jadi read
             // dibuka ke role yang sama dengan master lain sejak sekarang.
+            // Role `service` dulu ikut di sini; sekarang lebur ke `kitchen`.
             Route::get('/brand', [MasterController::class, 'brandindex']);
             Route::get('/brand/{id}', [MasterController::class, 'brandshow']);
 

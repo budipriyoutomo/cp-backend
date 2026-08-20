@@ -37,7 +37,7 @@ class RoleMiddlewareTest extends TestCase
 
     public function test_rejects_when_user_role_is_not_allowed(): void
     {
-        $user = new User(['role' => 'service']);
+        $user = new User(['role' => 'operation']);
 
         $response = $this->runMiddleware($user, ['admin']);
 
@@ -66,7 +66,7 @@ class RoleMiddlewareTest extends TestCase
     public function test_accepts_a_role_stored_as_a_php_array(): void
     {
         $user = new User();
-        $user->role = ['kitchen', 'service'];
+        $user->role = ['kitchen', 'production'];
 
         $response = $this->runMiddleware($user, ['admin', 'kitchen']);
 
@@ -84,7 +84,7 @@ class RoleMiddlewareTest extends TestCase
 
     public function test_still_rejects_an_array_role_with_no_overlap(): void
     {
-        $user = new User(['role' => '["service"]']);
+        $user = new User(['role' => '["operation"]']);
 
         $response = $this->runMiddleware($user, ['admin']);
 

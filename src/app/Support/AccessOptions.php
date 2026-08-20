@@ -21,12 +21,17 @@ final class AccessOptions
      *
      * Kolom ini bertipe string (bukan JSON array, walau sempat
      * terdokumentasi begitu) — satu user satu role.
+     *
+     * Role `service` sudah dihapus: izinnya di server identik dengan `kitchen`
+     * (keduanya hanya membaca master), jadi memisahkannya tidak pernah menjaga
+     * apa pun. Baris lama dipindah ke `kitchen` oleh migration
+     * `2026_08_19_000000_migrate_service_role_to_kitchen`. Modul `service` di
+     * MODULE_APPS sengaja tetap ada — itu sumbu lain, lihat catatannya di bawah.
      */
     public const ROLES = [
         'admin',
         'manager',
         'kitchen',
-        'service',
         'operation',
         'production',
     ];
@@ -36,6 +41,10 @@ final class AccessOptions
      *
      * `app` adalah modul dasar tanpa halaman sendiri — frontend melewatinya
      * saat mencari modul tujuan redirect.
+     *
+     * `service` masih di sini walau role bernama sama sudah dihapus: modul dan
+     * role adalah dua sumbu terpisah, dan `app/kitchen/layout.tsx` tetap
+     * menerima modul `service` sebagai jalan masuk ke layar dapur.
      */
     public const MODULE_APPS = [
         'app',

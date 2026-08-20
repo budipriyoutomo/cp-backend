@@ -70,9 +70,9 @@ class OutletTest extends TestCase
 
     public function test_non_admin_cannot_create_outlet(): void
     {
-        $service = $this->userWithRole('service');
+        $kitchen = $this->userWithRole('kitchen');
 
-        $this->actingAs($service, 'api')->postJson('/api/master/outlet', [
+        $this->actingAs($kitchen, 'api')->postJson('/api/master/outlet', [
             'code' => 'JKT',
             'name' => 'Jakarta',
         ])->assertStatus(403);

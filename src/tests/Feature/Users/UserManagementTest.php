@@ -158,12 +158,12 @@ class UserManagementTest extends TestCase
 
         $this->actingAs($admin, 'api')->putJson("/api/users/{$user->id}", [
             'name' => 'New Name',
-            'role' => 'service',
+            'role' => 'operation',
         ])->assertOk()->assertJsonPath('data.name', 'New Name');
 
         $user->refresh();
         $this->assertSame('New Name', $user->name);
-        $this->assertSame('service', $user->role);
+        $this->assertSame('operation', $user->role);
         // Password is unchanged when omitted.
         $this->assertTrue(Hash::check('original', $user->password));
     }

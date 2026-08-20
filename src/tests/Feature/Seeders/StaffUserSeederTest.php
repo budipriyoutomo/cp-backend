@@ -22,8 +22,11 @@ class StaffUserSeederTest extends TestCase
         $this->seed(StaffUserSeeder::class);
 
         $this->assertSame(10, User::count());
-        $this->assertSame(5, User::where('role', 'kitchen')->count());
-        $this->assertSame(5, User::where('role', 'service')->count());
+
+        // Role `service` sudah dihapus — seluruh staf dapur kini `kitchen`.
+        // Yang memisahkan mereka tinggal `module_app`, diperiksa di bawah.
+        $this->assertSame(10, User::where('role', 'kitchen')->count());
+        $this->assertSame(0, User::where('role', 'service')->count());
 
         foreach (['TSM', 'JWB', 'PVJ', 'FMB', 'P23'] as $code) {
             $kitchen = User::where('email', 'kitchen' . strtolower($code) . '@maharasa.id')->first();
@@ -32,10 +35,14 @@ class StaffUserSeederTest extends TestCase
             $this->assertSame(['ST' . $code], $kitchen->outlet);
             $this->assertSame(['kitchen'], $kitchen->module_app);
             $this->assertSame('Operation', $kitchen->departemen);
-        }
 
-        $service = User::where('email', 'servicetsm@maharasa.id')->firstOrFail();
-        $this->assertSame(['service'], $service->module_app);
+            $service = User::where('email', 'service' . strtolower($code) . '@maharasa.id')->first();
+
+            $this->assertNotNull($service, "Akun service {$code} tidak dibuat.");
+            $this->assertSame(['ST' . $code], $service->outlet);
+            $this->assertSame(['service'], $service->module_app);
+            $this->assertSame('kitchen', $service->role);
+        }
     }
 
     public function test_the_seeded_staff_can_log_in_with_password_and_with_pin(): void

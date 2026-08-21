@@ -15,7 +15,12 @@ class UserResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'         => $this->id,
+            // `users.id` satu-satunya auto-increment di skema ini, jadi tanpa
+            // cast ia terkirim sebagai angka JSON — sementara `/login` sudah
+            // lama dibaca frontend sebagai string. Satu user jadi punya dua
+            // bentuk id tergantung ia baru login atau baru me-restore sesi.
+            // `UserManagementResource` sudah melakukan cast ini sejak awal.
+            'id'         => (string) $this->id,
             'name'       => $this->name, 
             'role'       => $this->role,
             'departemen' => $this->departemen,

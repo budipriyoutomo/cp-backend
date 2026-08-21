@@ -77,10 +77,10 @@ Migration memakai macro `$table->fullstamps()` (mendefinisikan `created_by`/`upd
 **Urutan route penting.** Route statis harus dideklarasikan sebelum wildcard `/{id}`, kalau tidak akan tertangkap `show()`. Sudah ada komentar peringatan di `routes/api.php` soal `/sales/by-date`.
 
 ### Status proteksi route
-**Semua** route domain ada di belakang `auth:api`. Hanya `/register`, `/login`, `/login-pin` yang publik.
+**Semua** route domain ada di belakang `auth:api`. Yang tidak memakainya cuma tiga: `/login`, `/login-pin`, dan `/auth/refresh` — dua pertama memang pintu masuk, yang ketiga memvalidasi tokennya sendiri di controller (lihat bagian Auth). `/register` **bukan** route publik meski namanya terdengar begitu: ia kena `auth:api` + `role:admin`, karena menetapkan `role` dan `module_app` dari payload.
 
 Lapisan `role:` yang sudah terpasang:
-- `/master/*` — `role:admin` untuk write, `role:admin,kitchen,service` untuk read
+- `/master/*` — `role:admin` untuk write, `role:admin,kitchen` untuk read
 - `/users/*` — `role:admin`
 - `DELETE /closing-reports/{id}` — `role:admin,manager`
 
@@ -109,7 +109,15 @@ JWT via `tymon/jwt-auth`. Guard `api`. Sanctum masih ter-install dan dipakai di 
 
 Custom claims di token: `role`, `departemen`, `outlet`, `module_app`. **PIN sengaja tidak ikut** — payload JWT hanya base64, bukan enkripsi.
 
-**PIN.** `users.pin` adalah bcrypt; `users.pin_lookup` adalah HMAC-SHA256(pin, `APP_KEY`) yang unik dan ter-index. Keduanya ditulis oleh mutator `User::setPinAttribute()` — jangan pernah isi `pin_lookup` langsung, dan jangan tambahkan cast `hashed` ke `pin` (akan double-hash). `loginByPin()` mencari lewat `pin_lookup` lalu verifikasi `Hash::check()`. Endpoint-nya kena `throttle:5,1`.
+**PIN.** `users.pin` adalah bcrypt; `users.pin_lookup` adalah HMAC-SHA256(pin, `APP_KEY`) yang unik dan ter-index. Keduanya ditulis oleh mutator `User::setPinAttribute()` — jangan pernah isi `pin_lookup` langsung, dan jangan tambahkan cast `hashed` ke `pin` (akan double-hash). `loginByPin()` mencari lewat `pin_lookup` lalu verifikasi `Hash::check()`. Endpoint-nya kena `throttle:20,1` — bukan lebih ketat, karena satu outlet penuh tablet berbagi satu IP dan pergantian shift tidak boleh mengunci dapur.
+
+**Umur token.** `JWT_TTL` 60 menit, `JWT_REFRESH_TTL` 14 hari — nilai default `config/jwt.php`, kini ditulis eksplisit di `.env.example` supaya jadi keputusan yang terlihat. `.env` produksi belum menyebutnya, jadi di sana masih default. Blacklist aktif dengan grace period 0, jadi token yang sudah ditukar atau di-logout langsung mati.
+
+**`.env.example` dijaga `EnvExampleTest`.** Berkas itu pernah tidak mencantumkan `JWT_SECRET` sama sekali — setup baru gagal di seluruh jalur auth tanpa petunjuk apa yang kurang — dan kredensial RabbitMQ juga hilang. Saat menambah env var yang ketiadaannya mematikan sesuatu, tambahkan juga entri di data provider test itu.
+
+**`POST /auth/refresh` sengaja TIDAK di belakang `auth:api`.** Guard itu memvalidasi klaim `exp`, jadi token yang sudah mati ditolak 401 sebelum controller jalan — endpoint refresh pun hanya melayani token yang belum perlu di-refresh, kebalikan dari gunanya. Otorisasinya tetap ada, hanya pindah ke dalam controller: `JWTAuth::parseToken()->refresh()` menyalakan refresh flow (`exp` diabaikan, yang berlaku `iat + refresh_ttl`) dan tetap menolak token rusak, yang sudah di-blacklist, dan yang lewat jendela refresh. Ketiganya dijawab 401 dengan envelope standar. Dijaga `TokenRefreshTest`.
+
+Jangan kembalikan `auth:api` ke rute itu. Akibatnya tidak kelihatan di test yang memakai token segar — dan di lapangan berarti tablet dapur kehilangan sesi tiap 60 menit.
 
 ---
 

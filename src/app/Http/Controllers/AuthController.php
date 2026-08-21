@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use App\Http\Requests\RegisterRequest;
 use App\Models\User;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenBlacklistedException;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Resources\UserResource;
 
@@ -66,11 +69,35 @@ class AuthController extends BaseApiController
         return $this->success(null, 'Successfully logged out');
     }
 
+    /**
+     * Tukar token yang (biasanya) sudah kedaluwarsa dengan yang baru.
+     *
+     * Rute ini sengaja **tidak** di belakang `auth:api`. Guard itu memvalidasi
+     * klaim `exp`, jadi token yang mati ditolak 401 sebelum method ini jalan —
+     * yang berarti endpoint refresh hanya bekerja untuk token yang belum perlu
+     * di-refresh. `parseToken()->refresh()` menyalakan refresh flow: `exp`
+     * diabaikan, yang berlaku `iat + refresh_ttl` (14 hari secara default).
+     *
+     * Token lama masuk blacklist begitu ditukar. Kalau ada request lain yang
+     * masih membawa token itu saat penukaran terjadi, request tersebut akan
+     * kena 401 — frontend menanganinya dengan mencoba ulang memakai token yang
+     * sudah tersimpan, lihat `lib/api/client.ts`.
+     */
     public function refresh()
     {
-        // Through the guard, not JWTAuth::refresh(): the facade has no token
-        // bound to it here, while auth:api has already parsed the bearer token.
-        $token = auth('api')->refresh();
+        try {
+            $token = JWTAuth::parseToken()->refresh();
+        } catch (TokenExpiredException $e) {
+            // Lewat `refresh_ttl` — sesi benar-benar habis, bukan sekadar basi.
+            return $this->error('Sesi sudah berakhir, silakan login kembali', 401);
+        } catch (TokenBlacklistedException $e) {
+            // Sudah pernah ditukar (atau sudah logout). Menukarnya lagi akan
+            // memberi sesi kedua dari token yang sengaja dimatikan.
+            return $this->error('Token sudah tidak berlaku, silakan login kembali', 401);
+        } catch (JWTException $e) {
+            // Termasuk token rusak dan header Authorization yang tidak ada.
+            return $this->error('Token tidak valid', 401);
+        }
 
         return $this->success([
             'token'      => $token,

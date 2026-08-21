@@ -41,7 +41,10 @@ class PinLoginTest extends TestCase
         $this->postJson('/api/login-pin', ['pin' => '123456'])
             ->assertOk()
             ->assertJsonPath('status', true)
-            ->assertJsonPath('data.user.id', $user->id)
+            // String, bukan integer: `UserResource` melakukan cast supaya klien
+            // tidak melihat dua bentuk id untuk user yang sama. Lihat
+            // `UserIdShapeTest`.
+            ->assertJsonPath('data.user.id', (string) $user->id)
             ->assertJsonStructure(['data' => ['token', 'expires_in']]);
     }
 

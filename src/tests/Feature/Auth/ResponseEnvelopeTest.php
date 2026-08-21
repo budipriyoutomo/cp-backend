@@ -148,7 +148,7 @@ class ResponseEnvelopeTest extends TestCase
             ->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonPath('status', true)
-            ->assertJsonPath('data.id', $user->id);
+            ->assertJsonPath('data.id', (string) $user->id);
 
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/logout')

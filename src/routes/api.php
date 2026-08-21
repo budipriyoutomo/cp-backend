@@ -45,9 +45,15 @@ Route::post('/login-pin', [AuthController::class, 'loginByPin'])
     ->middleware('throttle:20,1');
 Route::middleware('auth:api')->get('/auth/me', [AuthController::class, 'me']);
 Route::middleware('auth:api')->post('/logout', [AuthController::class, 'logout']);
-// The controller method, the frontend service call and the Idempotency
-// skip-list entry all existed; only this route line was missing.
-Route::middleware('auth:api')->post('/auth/refresh', [AuthController::class, 'refresh']);
+// Tanpa `auth:api` — dan itu disengaja. Guard memvalidasi klaim `exp`, jadi
+// token yang sudah mati ditolak 401 sebelum controller jalan; endpoint refresh
+// pun cuma melayani token yang belum perlu di-refresh, yaitu kebalikan dari
+// gunanya. Otorisasinya tetap ada, hanya pindah ke dalam controller:
+// `parseToken()->refresh()` menolak token rusak, yang sudah di-blacklist, dan
+// yang lewat `refresh_ttl`. Throttle 20/menit menjaganya dari percobaan buta —
+// satu outlet berbagi satu IP, sama seperti alasan di `/login-pin`.
+Route::post('/auth/refresh', [AuthController::class, 'refresh'])
+    ->middleware('throttle:20,1');
 
 
 // ======================================================

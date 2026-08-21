@@ -223,7 +223,7 @@ class AuthControllerTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('status', true)
-            ->assertJsonPath('data.id', $user->id);
+            ->assertJsonPath('data.id', (string) $user->id);
     }
 
     public function test_me_requires_authentication(): void

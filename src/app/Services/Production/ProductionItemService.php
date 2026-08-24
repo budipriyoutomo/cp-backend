@@ -100,10 +100,16 @@ class ProductionItemService extends BaseService
      * polls it every 30 seconds per tablet, so a GET was writing the whole
      * outlet's rows several times a minute. The stored column is now kept fresh
      * by `production:refresh-belt-status` instead; see Console\Kernel.
+     *
+     * `menu.plateColor` is eager loaded because ProductionItemResource reads
+     * both. `$this->query()` is a bare newQuery() — it does not apply
+     * `$relations`, only buildQuery() does — so without this every row woke two
+     * extra queries and a 100-plate belt cost 201 round trips.
      */
     public function conveyor(string $outletId)
     {
         $items = $this->query()
+            ->with('menu.plateColor')
             ->where('outlet_id', $outletId)
             ->whereNull('final_status')
             ->whereDate('produced_at', today())
@@ -124,10 +130,12 @@ class ProductionItemService extends BaseService
     /**
      * Read-only, same reasoning as conveyor(): filtered on expires_at rather
      * than on the stored belt_status, which may lag behind by up to a minute.
+     * Eager loads `menu.plateColor` for the same reason as conveyor().
      */
     public function expired(string $outletId)
     {
         $items = $this->query()
+            ->with('menu.plateColor')
             ->where('outlet_id', $outletId)
             ->whereNull('final_status')
             ->where('expires_at', '<=', now())

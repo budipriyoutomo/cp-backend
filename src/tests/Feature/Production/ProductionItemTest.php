@@ -4,6 +4,7 @@ namespace Tests\Feature\Production;
 
 use App\Models\ProductionItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\Concerns\CreatesUsers;
 use Tests\Concerns\SeedsProductionData;
 use Tests\TestCase;
@@ -146,6 +147,66 @@ class ProductionItemTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $expired->id);
+    }
+
+    /**
+     * Every tablet polls these two lists every 30 seconds, so their cost has to
+     * stay flat in the number of plates on the belt.
+     *
+     * ProductionItemResource reads `menu->menuname` and
+     * `menu->plateColor->platename`. Neither list goes through buildQuery(), so
+     * the `$relations` property does not apply to them — `$this->query()` is a
+     * bare newQuery(). Without an explicit `with()` each row woke two more
+     * queries, and a 100-plate belt turned one GET into ~201 round trips.
+     */
+    public function test_belt_lists_do_not_grow_queries_with_the_number_of_plates(): void
+    {
+        $outlet = $this->createOutlet();
+
+        // Distinct menu + plate color per plate: shared ones would be resolved
+        // from Eloquent's identity map and hide the N+1 this test guards.
+        $seedPlates = function (int $count, int $offset) use ($outlet): void {
+            for ($i = $offset; $i < $offset + $count; $i++) {
+                $color = $this->createPlateColor(['platename' => "Warna {$i}"]);
+                $menu  = $this->createMenu($color, [
+                    'code'     => "MENU{$i}",
+                    'menuname' => "Sushi {$i}",
+                ]);
+
+                // One plate still on the belt, one already past due, so both
+                // endpoints see a growing list.
+                $this->createProductionItem($outlet, $menu, ['expires_at' => now()->addHour()]);
+                $this->createProductionItem($outlet, $menu, ['expires_at' => now()->subMinute()]);
+            }
+        };
+
+        $queries = 0;
+        DB::listen(function () use (&$queries): void {
+            $queries++;
+        });
+
+        $measure = function (string $endpoint) use ($outlet, &$queries): int {
+            $queries = 0;
+            $this->getJson("/api/production/{$endpoint}?outletId={$outlet->id}")->assertOk();
+
+            return $queries;
+        };
+
+        $seedPlates(1, 0);
+        $conveyorWithOne = $measure('conveyor');
+        $expiredWithOne  = $measure('expired');
+
+        $seedPlates(9, 1);
+        $conveyorWithTen = $measure('conveyor');
+        $expiredWithTen  = $measure('expired');
+
+        // Sanity check: the lists really did grow, so a flat query count means
+        // eager loading, not an empty response.
+        $this->getJson('/api/production/conveyor?outletId=' . $outlet->id)->assertJsonCount(10, 'data');
+        $this->getJson('/api/production/expired?outletId=' . $outlet->id)->assertJsonCount(10, 'data');
+
+        $this->assertSame($conveyorWithOne, $conveyorWithTen);
+        $this->assertSame($expiredWithOne, $expiredWithTen);
     }
 
     public function test_update_expired_marks_item_sold(): void

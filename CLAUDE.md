@@ -83,6 +83,7 @@ Lapisan `role:` yang sudah terpasang:
 - `/master/*` — `role:admin` untuk write, `role:admin,kitchen` untuk read
 - `/users/*` — `role:admin`
 - `DELETE /closing-reports/{id}` — `role:admin,manager`
+- `POST /production/import-backdate` dan `/preview`-nya — `role:admin`
 
 Sisanya (`/production/*`, `/reports/*`, `/sales/*`, `/waste/*`) baru butuh terautentikasi, belum dipetakan per role. `RouteProtectionTest` menjaga agar tidak ada yang bocor lagi — tambahkan entri di data provider-nya saat menambah route baru.
 
@@ -132,6 +133,7 @@ $this->service->plan           // ProductionPlanService       — plan CRUD
 $this->service->item           // ProductionItemService       — piring (inti)
 $this->service->wasteRecord    // WasteRecordService          — MENULIS waste_records
 $this->service->wasteReport    // WasteService                — MEMBACA laporan waste
+$this->service->backdateImport // ProductionBackdateImportService — impor CSV hari lalu
 ```
 
 ### `Production/ProductionItemService`
@@ -147,6 +149,9 @@ Pusat aturan bisnis piring.
 | `getSoldItem()` / `getWasteItem()` | Join ke `plate_colors` dengan cast `plate_colors.id::text` — karena `production_items.plate_color` bertipe `varchar` sementara `plate_colors.id` bertipe `uuid`. |
 
 Ketidakcocokan tipe `varchar` vs `uuid` ini muncul di beberapa tempat. `WasteAnalysisService` menghindarinya dengan tidak melakukan JOIN sama sekali dan meresolusi nama plate color di PHP — pola ini lebih portabel (test jalan di SQLite, produksi di PostgreSQL). **Ikuti pola itu untuk query baru.**
+
+### `Production/ProductionBackdateImportService`
+Impor produksi hari lalu dari CSV — satu-satunya jalur yang boleh menulis `final_status` di luar hari produksi, karena itu `role:admin`. `preview()` hanya membaca (tiap baris membawa `errors[]`-nya sendiri), `import()` menulis dalam satu transaksi dan menolak seluruh berkas kalau ada satu baris salah. Atribusi waktunya mengikuti `autoWasteCarryOver()`: `sold_at`/`wasted_at`/`recorded_at` = `produced_at`, bukan `now()`. Kode menu diresolusi lewat brand outlet (`ResolvesOutletBrand`) karena `menus.code` unik per brand. Bentuk berkas didokumentasikan di [../docs/api-reference.md](../docs/api-reference.md).
 
 ### `ClosingReport/ClosingReportService`
 - `getData()` dan `submit()` sama-sama mensyaratkan `SalesHeader` dengan `status = 'submitted'` di tanggal yang sama, kalau tidak → `BusinessRuleException`.

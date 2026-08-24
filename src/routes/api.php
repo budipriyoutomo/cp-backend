@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MasterController;
 use App\Http\Controllers\ProductionController;
+use App\Http\Controllers\ProductionImportController;
 use App\Http\Controllers\POSController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\WasteController;
@@ -125,6 +126,16 @@ Route::prefix('production')->middleware(['auth:api', 'outlet.access'])->group(fu
     Route::post('/waste', [ProductionController::class, 'wasteStore']);
     Route::get('/waste', [ProductionController::class, 'wasteIndex']);
     Route::get('/items', [ProductionController::class, 'productionList']);
+
+    // Backfill produksi hari lalu. `role:admin` bukan sekadar kehati-hatian:
+    // ini satu-satunya jalur yang boleh menulis `final_status` di luar hari
+    // produksi, jadi ia melewati gerbang yang menjaga semua route lain di grup
+    // ini. Preview tidak menulis apa pun, tapi ia membaca master brand penuh
+    // dan menghitung tabrakan — dijaga sama supaya tidak jadi celah baca.
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/import-backdate/preview', [ProductionImportController::class, 'preview']);
+        Route::post('/import-backdate', [ProductionImportController::class, 'store']);
+    });
 });
 
 // ======================================================

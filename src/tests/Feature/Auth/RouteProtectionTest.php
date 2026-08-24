@@ -53,6 +53,8 @@ class RouteProtectionTest extends TestCase
             'POST /production/waste'         => ['post', '/api/production/waste'],
             'GET /production/waste'          => ['get', '/api/production/waste'],
             'GET /production/items'          => ['get', '/api/production/items'],
+            'POST /production/import-preview' => ['post', '/api/production/import-backdate/preview'],
+            'POST /production/import'         => ['post', '/api/production/import-backdate'],
 
             // reports
             'GET /reports/pos-data'          => ['get', '/api/reports/pos-data'],

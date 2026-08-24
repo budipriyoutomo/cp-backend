@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Production\ProductionBackdateImportService;
 use App\Services\Production\ProductionDashboardService;
 use App\Services\Production\ProductionPlanService;
 use App\Services\Production\WasteRecordService;
@@ -23,5 +24,6 @@ class ProductionService
         public WasteRecordService $wasteRecord,
         public ProductionItemService $item,
         public WasteService $wasteReport,
+        public ProductionBackdateImportService $backdateImport,
     ) {}
 }

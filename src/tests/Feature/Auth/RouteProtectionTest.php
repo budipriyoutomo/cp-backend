@@ -43,13 +43,13 @@ class RouteProtectionTest extends TestCase
             'GET /production/stats'          => ['get', '/api/production/stats'],
             'GET /production/plan'           => ['get', '/api/production/plan'],
             'POST /production/plan'          => ['post', '/api/production/plan'],
-            'GET /production/conveyor'       => ['get', '/api/production/conveyor'],
+            'GET /production/conveyor-grouped' => ['get', '/api/production/conveyor-grouped'],
             'POST /production/produce'       => ['post', '/api/production/produce'],
             'POST /production/mark-sold'     => ['post', '/api/production/mark-sold'],
             'POST /production/mark-waste'    => ['post', '/api/production/mark-waste'],
             'POST /production/close-day'     => ['post', '/api/production/close-day'],
-            'GET /production/expired'        => ['get', '/api/production/expired'],
-            'PUT /production/expired/{id}'   => ['put', '/api/production/expired/some-id'],
+            'GET /production/expired-grouped' => ['get', '/api/production/expired-grouped'],
+            'POST /production/expired/bulk' => ['post', '/api/production/expired/bulk'],
             'POST /production/waste'         => ['post', '/api/production/waste'],
             'GET /production/waste'          => ['get', '/api/production/waste'],
             'GET /production/items'          => ['get', '/api/production/items'],
@@ -97,7 +97,7 @@ class RouteProtectionTest extends TestCase
         $this->actingAsRole('admin');
 
         // Not asserting the payload here — only that auth is no longer the blocker.
-        $this->getJson('/api/production/conveyor?outletId=' . $outlet->id)->assertOk();
+        $this->getJson('/api/production/conveyor-grouped?outletId=' . $outlet->id)->assertOk();
         $this->getJson('/api/waste/summary?outletId=' . $outlet->id . '&date=' . now()->toDateString())
             ->assertOk();
     }

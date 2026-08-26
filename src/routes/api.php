@@ -112,16 +112,19 @@ Route::prefix('production')->middleware(['auth:api', 'outlet.access'])->group(fu
     Route::get('/plan', [ProductionController::class, 'plan']);
     Route::post('/plan', [ProductionController::class, 'savePlan']);
 
-    Route::get('/conveyor', [ProductionController::class, 'conveyor']);
+    // Belt dibaca per batch produksi, bukan per piring. Bentuk per-piring
+    // (`/conveyor`, `/expired`, `PUT /expired/{id}`) sudah dibuang: satu piring
+    // adalah satu baris, jadi belt seribu piring berarti seribu objek tiap 30
+    // detik per tablet, dan menutup satu batch berarti puluhan request.
+    Route::get('/conveyor-grouped', [ProductionController::class, 'conveyorGrouped']);
+
     Route::post('/produce', [ProductionController::class, 'produce']);
     Route::post('/mark-sold', [ProductionController::class, 'markSold']);
     Route::post('/mark-waste', [ProductionController::class, 'markWaste']);
     Route::post('/close-day', [ProductionController::class, 'closeDay']);
 
-    
-    Route::get('/expired', [ProductionController::class, 'expired']);
-    
-    Route::put('/expired/{id}', [ProductionController::class, 'updateExpired']);
+    Route::get('/expired-grouped', [ProductionController::class, 'expiredGrouped']);
+    Route::post('/expired/bulk', [ProductionController::class, 'updateExpiredBulk']);
 
     Route::post('/waste', [ProductionController::class, 'wasteStore']);
     Route::get('/waste', [ProductionController::class, 'wasteIndex']);

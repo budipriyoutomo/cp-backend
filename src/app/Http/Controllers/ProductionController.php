@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
     use Illuminate\Http\Request; 
     use App\Http\Resources\Production\ProductionItemResource;
+    use App\Http\Resources\Production\ProductionItemGroupResource;
     use App\Http\Resources\Production\WasteRecordResource;
     use App\Http\Resources\Production\ProductionMenuResource;
 
     use App\Http\Requests\Production\ProductionProduceRequest;
     use App\Http\Requests\Production\ProductionPlanRequest;
-    use App\Http\Requests\Production\ProductionExpiredChangeRequest;
+    use App\Http\Requests\Production\ProductionExpiredBulkChangeRequest;
     use App\Http\Requests\Production\WasteRecordRequest;
     use App\Http\Requests\Production\WasteIndexRequest;
 
@@ -80,56 +81,56 @@ namespace App\Http\Controllers;
 
         /*
         |--------------------------------------------------------------------------
-        | CONVEYOR
+        | CONVEYOR (PER BATCH PRODUKSI)
         |--------------------------------------------------------------------------
         */
-        public function conveyor(Request $request)
+        public function conveyorGrouped(Request $request)
         {
-            $items = $this->service->item->conveyor($request->outletId); 
-            
-            return $this->success(
-                ProductionItemResource::collection($items)
-            );
-        } 
+            $groups = $this->service->item->conveyorGrouped($request->outletId);
 
-        /*
-        |--------------------------------------------------------------------------
-        | EXPIRED ITEMS
-        |--------------------------------------------------------------------------
-        */
-        public function expired(Request $request)
-        {
-            $items = $this->service->item->expired($request->outletId); 
-            
             return $this->success(
-                ProductionItemResource::collection($items)
+                ProductionItemGroupResource::collection($groups)
             );
-            
         }
 
         /*
         |--------------------------------------------------------------------------
-        | EXPIRED ITEMS
+        | EXPIRED ITEMS (PER BATCH PRODUKSI)
         |--------------------------------------------------------------------------
         */
-        public function updateExpired(ProductionExpiredChangeRequest $request, string $id)
+        public function expiredGrouped(Request $request)
         {
-            $this->service->item->updateExpired([
-                'id'     => $id,
-                'status' => $request->status,
-                'notes'  => $request->notes,
-            ]);
+            $groups = $this->service->item->expiredGrouped($request->outletId);
 
-            if ($request->status === 'waste') {
-                $this->service->wasteRecord->recordFromItems(
-                    [$id],
-                    $request->notes ?? 'Marked as waste from expired items'
-                );
-            }
-
-            return $this->success(null, 'Expired item updated successfully');
+            return $this->success(
+                ProductionItemGroupResource::collection($groups)
+            );
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | UPDATE EXPIRED (SATU BATCH SEKALIGUS)
+        |--------------------------------------------------------------------------
+        | Pencatatan waste_records ada di dalam service, bukan di sini: hanya
+        | service yang tahu piring mana yang benar-benar berhasil diklaim.
+        |
+        | Jalur per-piring yang dulu ada di sini melewatkan itu — ia memanggil
+        | recordFromItems() tanpa melihat apakah piringnya benar-benar berubah,
+        | jadi piring yang sudah ditutup tablet lain tetap dapat baris waste.
+        */
+        public function updateExpiredBulk(ProductionExpiredBulkChangeRequest $request)
+        {
+            $result = $this->service->item->updateExpiredBulk(
+                $request->input('itemIds'),
+                $request->input('status'),
+                $request->input('notes')
+            );
+
+            return $this->success(
+                $result,
+                "{$result['updated']} plate diperbarui, {$result['skipped']} dilewati"
+            );
+        }
 
         /*
         |--------------------------------------------------------------------------

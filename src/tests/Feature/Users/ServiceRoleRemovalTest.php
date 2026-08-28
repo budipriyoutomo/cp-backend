@@ -29,6 +29,8 @@ class ServiceRoleRemovalTest extends TestCase
             'email'    => 'admin@example.com',
             'password' => 'secret123',
             'role'     => 'admin',
+            // `/users` dijaga `module:admin` sejak modul ditegakkan di server.
+            'module_app' => ['admin'],
         ]);
     }
 

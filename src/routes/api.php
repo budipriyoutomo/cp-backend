@@ -64,7 +64,7 @@ Route::prefix('master')
     ->middleware(['auth:api', 'outlet.access'])
     ->group(function () {
 
-        Route::middleware('role:admin')->group(function () {
+        Route::middleware(['role:admin', 'module:admin'])->group(function () {
 
             Route::crud('platecolor', MasterController::class, 'platecolor');
             Route::crud('menu', MasterController::class, 'menu');
@@ -74,19 +74,24 @@ Route::prefix('master')
 
         });
 
-        Route::middleware('role:admin,kitchen')->group(function () {
-
-            Route::get('/platecolor', [MasterController::class, 'platecolorindex']);
-            Route::get('/menu', [MasterController::class, 'menuindex']);
-            Route::get('/outlet', [MasterController::class, 'outletindex']);
-            Route::get('/waste-reason', [MasterController::class, 'wastereasonindex']);
-            // Dapur perlu baca brand untuk menyaring menu (Fase 4), jadi read
-            // dibuka ke role yang sama dengan master lain sejak sekarang.
-            // Role `service` dulu ikut di sini; sekarang lebur ke `kitchen`.
-            Route::get('/brand', [MasterController::class, 'brandindex']);
-            Route::get('/brand/{id}', [MasterController::class, 'brandshow']);
-
-        });
+        // Baca master TIDAK dipagari role maupun modul, dan itu disengaja.
+        //
+        // Plate color, menu, outlet, waste reason, dan brand adalah data acuan
+        // yang dibutuhkan setiap modul: `OutletProvider` memanggil
+        // `/master/outlet` di layout SEMUA modul, dan layar production maupun
+        // kitchen menyaring menu lewat plate color. Gerbang lamanya
+        // `role:admin,kitchen` membuat role `manager`, `operation`, dan
+        // `production` dijawab 403 di sini — selector outletnya kosong, dan
+        // seluruh modul mereka berhenti mengambil data tanpa pesan apa pun.
+        //
+        // Yang sensitif adalah menulisnya, dan itu dijaga grup di atas.
+        // Batas datanya tetap ada: `outlet.access` di grup induk.
+        Route::get('/platecolor', [MasterController::class, 'platecolorindex']);
+        Route::get('/menu', [MasterController::class, 'menuindex']);
+        Route::get('/outlet', [MasterController::class, 'outletindex']);
+        Route::get('/waste-reason', [MasterController::class, 'wastereasonindex']);
+        Route::get('/brand', [MasterController::class, 'brandindex']);
+        Route::get('/brand/{id}', [MasterController::class, 'brandshow']);
 
     });
 
@@ -94,7 +99,7 @@ Route::prefix('master')
 // USER MANAGEMENT ROUTES (admin only)
 // ======================================================
 Route::prefix('users')
-    ->middleware(['auth:api', 'role:admin'])
+    ->middleware(['auth:api', 'role:admin', 'module:admin'])
     ->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::post('/', [UserController::class, 'store']);
@@ -106,7 +111,12 @@ Route::prefix('users')
 // PRODUCTION ROUTES
 // ======================================================
 
-Route::prefix('production')->middleware(['auth:api', 'outlet.access'])->group(function () {
+// Modul yang memakai grup ini: `kitchen`/`service` (dashboard, produce,
+// conveyor, expired), `production` (planning, waste), dan `report`
+// (production-item-list membaca `/production/items`).
+Route::prefix('production')
+    ->middleware(['auth:api', 'outlet.access', 'module:kitchen,service,production,report'])
+    ->group(function () {
 
     Route::get('/stats', [ProductionController::class, 'stats']);
     Route::get('/plan', [ProductionController::class, 'plan']);
@@ -130,22 +140,35 @@ Route::prefix('production')->middleware(['auth:api', 'outlet.access'])->group(fu
     Route::get('/waste', [ProductionController::class, 'wasteIndex']);
     Route::get('/items', [ProductionController::class, 'productionList']);
 
-    // Backfill produksi hari lalu. `role:admin` bukan sekadar kehati-hatian:
-    // ini satu-satunya jalur yang boleh menulis `final_status` di luar hari
-    // produksi, jadi ia melewati gerbang yang menjaga semua route lain di grup
-    // ini. Preview tidak menulis apa pun, tapi ia membaca master brand penuh
-    // dan menghitung tabrakan — dijaga sama supaya tidak jadi celah baca.
-    Route::middleware('role:admin')->group(function () {
+});
+
+// Backfill produksi hari lalu — layar `/admin/production-import`.
+//
+// Blok terpisah, bukan nested di grup production, karena modulnya berbeda:
+// grup di atas milik modul dapur/produksi/report, sedangkan layar ini milik
+// modul `admin`. Kalau dinested, kedua gerbang modul harus lolos sekaligus —
+// dan tidak ada user yang bisa memenuhi keduanya.
+//
+// `role:admin` bukan sekadar kehati-hatian: ini satu-satunya jalur yang boleh
+// menulis `final_status` di luar hari produksi. Preview tidak menulis apa pun,
+// tapi ia membaca master brand penuh dan menghitung tabrakan — dijaga sama
+// supaya tidak jadi celah baca.
+Route::prefix('production')
+    ->middleware(['auth:api', 'outlet.access', 'role:admin', 'module:admin'])
+    ->group(function () {
         Route::post('/import-backdate/preview', [ProductionImportController::class, 'preview']);
         Route::post('/import-backdate', [ProductionImportController::class, 'store']);
     });
-});
 
 // ======================================================
 // REPORT ROUTES
 // ======================================================
 
-Route::prefix('reports')->middleware(['auth:api', 'outlet.access'])->group(function () {
+// `operation` ikut di sini: layar sales-input membaca `/reports/pos-data`
+// untuk merekonsiliasi angka POS.
+Route::prefix('reports')
+    ->middleware(['auth:api', 'outlet.access', 'module:operation,report'])
+    ->group(function () {
 
     Route::get('/pos-data', [POSController::class, 'getposData']);
     Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
@@ -153,7 +176,9 @@ Route::prefix('reports')->middleware(['auth:api', 'outlet.access'])->group(funct
     Route::get('/waste-analysis', [ReportsController::class, 'wasteAnalysis']);
 });
 
-Route::prefix('sales')->middleware(['auth:api', 'outlet.access'])->group(function () {
+Route::prefix('sales')
+    ->middleware(['auth:api', 'outlet.access', 'module:operation'])
+    ->group(function () {
     Route::get('/', [SalesController::class, 'drafts']);
     Route::post('/', [SalesController::class, 'store']);
     // NOTE: static routes must be declared before the /{id} wildcard, otherwise
@@ -162,7 +187,11 @@ Route::prefix('sales')->middleware(['auth:api', 'outlet.access'])->group(functio
     Route::get('/{id}', [SalesController::class, 'show']);
 });
 
-Route::prefix('closing-reports')->middleware(['auth:api', 'outlet.access'])->group(function () {
+// `operation` menyusun dan menandatangani; `report` membacanya di
+// `/report/closing-reports`.
+Route::prefix('closing-reports')
+    ->middleware(['auth:api', 'outlet.access', 'module:operation,report'])
+    ->group(function () {
     Route::get('/', [ClosingReportController::class, 'index']);
     Route::get('/data', [ClosingReportController::class, 'data']);
     Route::post('/submit', [ClosingReportController::class, 'submit']);
@@ -174,7 +203,11 @@ Route::prefix('closing-reports')->middleware(['auth:api', 'outlet.access'])->gro
         ->middleware('role:admin,manager');
 });
 
-Route::prefix('waste')->middleware(['auth:api', 'outlet.access'])->group(function () {
+// Hanya layar `/production/waste` yang memakai grup ini. Analisis waste di
+// modul report jalan lewat `/reports/waste-analysis`, bukan dari sini.
+Route::prefix('waste')
+    ->middleware(['auth:api', 'outlet.access', 'module:production'])
+    ->group(function () {
 
     Route::get('/', [WasteController::class, 'index']);
     Route::get('/summary', [WasteController::class, 'summary']);

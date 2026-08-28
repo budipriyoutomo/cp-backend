@@ -45,6 +45,11 @@ final class AccessOptions
      * `service` masih di sini walau role bernama sama sudah dihapus: modul dan
      * role adalah dua sumbu terpisah, dan `app/kitchen/layout.tsx` tetap
      * menerima modul `service` sebagai jalan masuk ke layar dapur.
+     *
+     * Sejak middleware `module:` ada, daftar ini bukan lagi sekadar urusan
+     * frontend — server memakai nilai yang sama untuk menutup grup route.
+     * Menambah modul di sini berarti juga memutuskan grup route mana yang
+     * dibukanya, dan halaman tujuannya di `frontend/lib/constants/access.ts`.
      */
     public const MODULE_APPS = [
         'app',
@@ -55,6 +60,45 @@ final class AccessOptions
         'admin',
         'operation',
     ];
+
+    /**
+     * Modul yang hanya boleh dipegang role tertentu.
+     *
+     * Dua sumbu ini menjawab pertanyaan berbeda — `role` "boleh melakukan apa",
+     * `module_app` "boleh sampai ke mana" — jadi umumnya bebas dikombinasikan.
+     * Modul `admin` pengecualiannya: seluruh layar di baliknya (master, users,
+     * import backdate) dijaga `role:admin` di server, jadi memberikannya ke role
+     * lain menghasilkan halaman yang terbuka tapi setiap aksinya 403. Bukan
+     * lubang keamanan — server tetap menahan — tapi kegagalan yang membingungkan
+     * dan tidak ada gunanya dibiarkan bisa tersimpan.
+     *
+     * @var array<string, array<int, string>>
+     */
+    public const MODULE_ROLE_REQUIREMENTS = [
+        'admin' => ['admin'],
+    ];
+
+    /**
+     * Alasan kenapa kombinasi role + module_app ini tidak sah, atau `null`
+     * kalau tidak apa-apa.
+     *
+     * @param  array<int, string>  $modules
+     */
+    public static function conflictFor(string $role, array $modules): ?string
+    {
+        foreach (self::MODULE_ROLE_REQUIREMENTS as $module => $allowedRoles) {
+            if (in_array($module, $modules, true) && ! in_array($role, $allowedRoles, true)) {
+                return sprintf(
+                    'Modul `%s` hanya untuk role %s — role `%s` akan melihat halamannya tapi ditolak di setiap aksi.',
+                    $module,
+                    implode('/', $allowedRoles),
+                    $role
+                );
+            }
+        }
+
+        return null;
+    }
 
     /**
      * @return array<int, string>

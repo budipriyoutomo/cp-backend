@@ -9,6 +9,7 @@ use App\Support\AccessOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends BaseApiController
 {
@@ -47,6 +48,8 @@ class UserController extends BaseApiController
             'module_app.*' => ['string', Rule::in(AccessOptions::MODULE_APPS)],
         ]);
 
+        $this->guardRoleModuleConflict($data['role'], $data['module_app'] ?? []);
+
         $data['password'] = Hash::make($data['password']);
         $user = User::create($data);
 
@@ -74,6 +77,14 @@ class UserController extends BaseApiController
             'module_app.*' => ['string', Rule::in(AccessOptions::MODULE_APPS)],
         ]);
 
+        // Role dan modul bisa datang sebagian pada update, jadi yang diperiksa
+        // adalah gabungan nilai baru dengan nilai yang sudah tersimpan —
+        // mengubah salah satunya saja tetap bisa menghasilkan kombinasi timpang.
+        $this->guardRoleModuleConflict(
+            $data['role'] ?? (string) $user->role,
+            $data['module_app'] ?? (is_array($user->module_app) ? $user->module_app : [])
+        );
+
         // Only update the password when a new one is supplied.
         if (!empty($data['password'])) {
             $data['password'] = Hash::make($data['password']);
@@ -93,6 +104,25 @@ class UserController extends BaseApiController
      * PIN uniqueness is checked against the blind index: users.pin holds a
      * bcrypt hash, so `unique:users,pin` could never match anything.
      */
+    /**
+     * Tolak kombinasi role + module_app yang menghasilkan halaman terbuka tapi
+     * setiap aksinya 403.
+     *
+     * Dilempar sebagai error validasi pada field `module_app` supaya layar User
+     * Management menampilkannya di tempat centangnya berada, bukan sebagai
+     * kegagalan umum yang tidak menunjuk apa pun.
+     *
+     * @param  array<int, string>  $modules
+     */
+    private function guardRoleModuleConflict(string $role, array $modules): void
+    {
+        $conflict = AccessOptions::conflictFor($role, $modules);
+
+        if ($conflict !== null) {
+            throw ValidationException::withMessages(['module_app' => $conflict]);
+        }
+    }
+
     private function uniquePinRule(?int $ignoreUserId = null): callable
     {
         return function (string $attribute, $value, callable $fail) use ($ignoreUserId) {

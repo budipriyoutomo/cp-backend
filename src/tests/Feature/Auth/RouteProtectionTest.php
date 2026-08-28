@@ -76,6 +76,10 @@ class RouteProtectionTest extends TestCase
             'GET /closing-reports/{id}'      => ['get', '/api/closing-reports/some-id'],
             'DELETE /closing-reports/{id}'   => ['delete', '/api/closing-reports/some-id'],
 
+            // production — import backdate (prefix production, modul admin)
+            'POST /production/import-backdate' => ['post', '/api/production/import-backdate'],
+            'POST /production/import-preview'  => ['post', '/api/production/import-backdate/preview'],
+
             // waste
             'GET /waste'                     => ['get', '/api/waste'],
             'GET /waste/summary'             => ['get', '/api/waste/summary'],

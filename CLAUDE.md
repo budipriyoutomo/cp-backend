@@ -79,13 +79,30 @@ Migration memakai macro `$table->fullstamps()` (mendefinisikan `created_by`/`upd
 ### Status proteksi route
 **Semua** route domain ada di belakang `auth:api`. Yang tidak memakainya cuma tiga: `/login`, `/login-pin`, dan `/auth/refresh` — dua pertama memang pintu masuk, yang ketiga memvalidasi tokennya sendiri di controller (lihat bagian Auth). `/register` **bukan** route publik meski namanya terdengar begitu: ia kena `auth:api` + `role:admin`, karena menetapkan `role` dan `module_app` dari payload.
 
-Lapisan `role:` yang sudah terpasang:
-- `/master/*` — `role:admin` untuk write, `role:admin,kitchen` untuk read
-- `/users/*` — `role:admin`
-- `DELETE /closing-reports/{id}` — `role:admin,manager`
-- `POST /production/import-backdate` dan `/preview`-nya — `role:admin`
+**Dua sumbu, dua middleware.** `role:` menjawab *boleh melakukan apa*, `module:` menjawab *boleh sampai ke mana*. Banyak rute memakai keduanya, dan keduanya harus lolos.
 
-Sisanya (`/production/*`, `/reports/*`, `/sales/*`, `/waste/*`) baru butuh terautentikasi, belum dipetakan per role. `RouteProtectionTest` menjaga agar tidak ada yang bocor lagi — tambahkan entri di data provider-nya saat menambah route baru.
+| Grup | `role:` | `module:` |
+|------|---------|-----------|
+| `/master/*` tulis | `admin` | `admin` |
+| `/master/*` **baca** | — | — |
+| `/users/*` | `admin` | `admin` |
+| `POST /production/import-backdate*` | `admin` | `admin` |
+| `/production/*` sisanya | — | `kitchen,service,production,report` |
+| `/reports/*` | — | `operation,report` |
+| `/sales/*` | — | `operation` |
+| `/closing-reports/*` | — | `operation,report` |
+| `DELETE /closing-reports/{id}` | `admin,manager` | `operation,report` |
+| `/waste/*` | — | `production` |
+
+**Baca master sengaja tanpa gerbang apa pun.** `OutletProvider` memanggil `/master/outlet` di layout **setiap** modul, dan layar production maupun kitchen menyaring menu lewat plate color. Gerbang lamanya `role:admin,kitchen` membuat role `manager`, `operation`, dan `production` dijawab 403 di sini — selector outlet kosong, seluruh modul mereka berhenti mengambil data, tanpa pesan apa pun. Yang sensitif adalah menulisnya. Batas datanya tetap ada lewat `outlet.access`.
+
+**Import backdate ada di blok `prefix('production')` sendiri, bukan nested.** Modulnya `admin`, sedangkan grup production milik modul dapur/produksi/report. Kalau dinested, kedua gerbang modul harus lolos sekaligus — dan tidak ada user yang bisa memenuhi keduanya.
+
+**`ModuleAccess` tidak punya jalan pintas untuk `admin`**, beda dengan `OutletAccess`. Kalau seorang admin hanya diberi modul `admin`, itu memang yang dimaksud orang yang menyetelnya.
+
+`RouteProtectionTest` menjaga agar tidak ada yang bocor lagi — tambahkan entri di data provider-nya saat menambah route baru. Batas modulnya diuji `ModuleAccessTest`; keselarasan role↔modul diuji `RoleModuleConsistencyTest`.
+
+**Sebelum menyalakan ini di lingkungan yang sudah berisi data, jalankan `php artisan users:audit-access`.** Sampai `module:` ada, tidak ada yang memaksa `module_app` konsisten — user yang modulnya tidak cocok akan mendadak kena 403.
 
 ---
 
@@ -99,6 +116,10 @@ Sisanya (`/production/*`, `/reports/*`, `/sales/*`, `/waste/*`) baru butuh terau
 - `QueryException` saat menyimpan (race condition dua request bersamaan) sengaja ditelan.
 
 **`RoleMiddleware`** (alias `role`) — `role:admin,kitchen` mengizinkan salah satu. Menolak dengan 403 `{ success: false, message: 'Unauthorized access' }`.
+
+**`ModuleAccess`** (alias `module`) — `module:operation,report` mengizinkan salah satu, dibaca dari `users.module_app`. Amplop errornya sama, pesannya `'Modul ini tidak termasuk akses Anda'`. `module_app` kosong atau `null` berarti **tidak punya modul**, bukan punya semuanya — gagal-tertutup, sama seperti `AuthGuard` di frontend. Bentuk JSON lama ikut dinormalkan, sama seperti `RoleMiddleware::rolesOf()`.
+
+Sebelum ini ada, `module_app` cuma dipakai frontend: daftarnya ikut di klaim JWT tapi server tidak pernah membacanya, jadi siapa pun yang memegang token bisa memanggil endpoint modul mana pun. Halaman yang tidak dirender bukan endpoint yang tertutup.
 
 **Throttle** — 60 request/menit per user-id (atau IP kalau anonim), didefinisikan di `RouteServiceProvider`.
 

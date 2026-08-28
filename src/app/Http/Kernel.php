@@ -67,5 +67,8 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
         'outlet.access' => \App\Http\Middleware\OutletAccess::class,
+        // `role:` menjawab "boleh melakukan apa", `module:` menjawab "boleh
+        // sampai ke mana". Banyak rute memakai keduanya.
+        'module' => \App\Http\Middleware\ModuleAccess::class,
     ];
 }

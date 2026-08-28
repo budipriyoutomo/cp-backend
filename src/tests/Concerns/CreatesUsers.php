@@ -24,20 +24,30 @@ trait CreatesUsers
     }
 
     /**
-     * Setiap role kecuali `manager` punya modul bernama sama. `app` selalu ikut
-     * sebagai modul dasar.
+     * Fixture ini memegang setiap modul yang rolenya boleh pegang.
      *
-     * Fixture lama menulis `['cmms']` — modul dari aplikasi lain yang tidak
-     * pernah ada di sistem ini, jadi tidak ada test yang benar-benar menguji
-     * apa pun soal akses modul.
+     * Sengaja longgar. Sejak `module:` menegakkan modul di server, fixture yang
+     * sempit membuat ratusan test bisnis gagal karena alasan yang tidak sedang
+     * mereka uji — test soal perhitungan waste tidak seharusnya jatuh di gerbang
+     * modul. Batas modulnya diuji di tempat yang memang untuk itu:
+     * `ModuleAccessTest` dan `RouteProtectionTest`, yang menyetel `module_app`
+     * eksplisit per kasus.
+     *
+     * Modul `admin` hanya diberikan ke role `admin`, mengikuti
+     * `AccessOptions::MODULE_ROLE_REQUIREMENTS` — fixture tidak boleh membentuk
+     * kombinasi yang ditolak `UserController` kalau lewat API.
      *
      * @return array<int, string>
      */
     protected static function modulesForRole(string $role): array
     {
-        return in_array($role, AccessOptions::MODULE_APPS, true)
-            ? ['app', $role]
-            : ['app'];
+        $modules = AccessOptions::MODULE_APPS;
+
+        if (AccessOptions::conflictFor($role, $modules) !== null) {
+            $modules = array_values(array_diff($modules, ['admin']));
+        }
+
+        return $modules;
     }
 
     /**

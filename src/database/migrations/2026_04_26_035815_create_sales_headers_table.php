@@ -20,10 +20,8 @@ return new class extends Migration
 
             // fingerprint
             $table->timestamps();
-            $table->uuid('created_by')->nullable();
-            $table->uuid('updated_by')->nullable();
+            $table->fullstamps();
             $table->softDeletes();
-            $table->uuid('deleted_by')->nullable();
 
             $table->index(['outlet_id', 'date']);
         });

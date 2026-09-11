@@ -93,6 +93,32 @@ class ClosingReportTest extends TestCase
         ]);
     }
 
+    /**
+     * `submitted_by` diisi manual dengan `auth()->id()`, dan `users.id` adalah
+     * auto-increment — jadi yang masuk ke sana angka, bukan UUID. Kolomnya
+     * pernah bertipe `uuid` dan mematikan seluruh submit di PostgreSQL.
+     * Tipenya dijaga UserstampColumnTypeTest; di sini yang dibuktikan nilainya.
+     */
+    public function test_submit_stamps_the_numeric_user_id(): void
+    {
+        $user   = $this->actingAsRole('admin');
+        $outlet = $this->createOutlet();
+        $color  = $this->createPlateColor();
+        $this->seedSales($outlet, $color, 'submitted');
+
+        $this->postJson('/api/closing-reports/submit', [
+            'outletId'        => $outlet->id,
+            'date'            => self::DATE,
+            'kitchenLeader'   => 'Budi',
+            'operationLeader' => 'Sari',
+        ])->assertOk();
+
+        $this->assertSame(
+            (string) $user->id,
+            trim((string) ClosingReport::sole()->submitted_by)
+        );
+    }
+
     public function test_submit_validates_required_fields(): void
     {
         $this->postJson('/api/closing-reports/submit', [])

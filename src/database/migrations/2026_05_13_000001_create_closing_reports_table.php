@@ -19,7 +19,7 @@ return new class extends Migration
             $table->json('waste_photo_urls')->nullable();
             $table->text('notes')->nullable();
             $table->timestamp('submitted_at')->nullable();
-            $table->uuid('submitted_by')->nullable();
+            $table->char('submitted_by', 36)->nullable();
 
             $table->timestamps();
             $table->fullstamps();

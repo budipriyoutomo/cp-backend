@@ -9,7 +9,7 @@ class SubmitClosingReportRequest extends BaseRequest
     protected function rulesForCreate(): array
     {
         return [
-            'outletId' => ['required', 'exists:outlets,id'],
+            'outletId' => ['required', 'uuid', 'exists:outlets,id'],
             'date' => ['required', 'date'],
             'kitchenLeader' => ['required', 'string', 'max:255'],
             'operationLeader' => ['required', 'string', 'max:255'],

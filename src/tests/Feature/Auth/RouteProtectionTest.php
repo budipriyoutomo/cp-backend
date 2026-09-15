@@ -26,6 +26,14 @@ class RouteProtectionTest extends TestCase
     use CreatesUsers;
     use SeedsProductionData;
 
+    /**
+     * Segmen `{id}` dibatasi bentuk uuid di routes/api.php — id yang bentuknya
+     * salah tidak pernah cocok dengan route-nya, jadi jawabannya 404 dan gerbang
+     * auth tidak pernah dilewati. Placeholder di bawah karena itu harus
+     * berbentuk uuid: yang diuji di sini gerbangnya, bukan pencocokan route.
+     */
+    private const SOME_UUID = '00000000-0000-4000-8000-000000000000';
+
     public static function guardedRoutes(): array
     {
         return [
@@ -66,15 +74,15 @@ class RouteProtectionTest extends TestCase
             'GET /sales'                     => ['get', '/api/sales'],
             'POST /sales'                    => ['post', '/api/sales'],
             'GET /sales/by-date'             => ['get', '/api/sales/by-date'],
-            'GET /sales/{id}'                => ['get', '/api/sales/some-id'],
+            'GET /sales/{id}'                => ['get', '/api/sales/' . self::SOME_UUID],
 
             // closing reports
             'GET /closing-reports'           => ['get', '/api/closing-reports'],
             'GET /closing-reports/data'      => ['get', '/api/closing-reports/data'],
             'POST /closing-reports/submit'   => ['post', '/api/closing-reports/submit'],
             'POST /closing-reports/upload'   => ['post', '/api/closing-reports/upload-photos'],
-            'GET /closing-reports/{id}'      => ['get', '/api/closing-reports/some-id'],
-            'DELETE /closing-reports/{id}'   => ['delete', '/api/closing-reports/some-id'],
+            'GET /closing-reports/{id}'      => ['get', '/api/closing-reports/' . self::SOME_UUID],
+            'DELETE /closing-reports/{id}'   => ['delete', '/api/closing-reports/' . self::SOME_UUID],
 
             // production — import backdate (prefix production, modul admin)
             'POST /production/import-backdate' => ['post', '/api/production/import-backdate'],
@@ -83,7 +91,7 @@ class RouteProtectionTest extends TestCase
             // waste
             'GET /waste'                     => ['get', '/api/waste'],
             'GET /waste/summary'             => ['get', '/api/waste/summary'],
-            'GET /waste/{id}'                => ['get', '/api/waste/some-id'],
+            'GET /waste/{id}'                => ['get', '/api/waste/' . self::SOME_UUID],
         ];
     }
 

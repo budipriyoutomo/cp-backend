@@ -26,6 +26,17 @@ namespace App\Http\Controllers;
 
         public function getposData(Request $request)
         {
+            // Endpoint ini sebelumnya tidak memvalidasi apa pun: `outletId`
+            // langsung masuk ke `where('outlet_id', ...)`, dan `outlets.id`
+            // bertipe uuid di PostgreSQL. Nilai yang bentuknya salah — atau
+            // hilang sama sekali — menjawab 500 "invalid input syntax for type
+            // uuid", bukan 422. Aturannya disamakan dengan endpoint production
+            // di sebelahnya.
+            $request->validate([
+                'outletId' => ['required', 'uuid'],
+                'date'     => ['required', 'date'],
+            ]);
+
             // 🧹 Bereskan plate sisa hari sebelumnya yang belum diselesaikan.
             // Otomatis menjadi waste, diatribusikan ke hari produksinya.
             $this->productionItemService->autoWasteCarryOver($request->outletId);

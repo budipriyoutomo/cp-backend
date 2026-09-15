@@ -49,6 +49,16 @@ Subclass cukup mendeklarasikan `$model`, `$relations`, `$searchable`, `$sortable
 ### `Services\Concerns\ResolvesOutletBrand`
 Satu outlet melayani satu brand, jadi pemanggil cukup tahu outlet. Trait ini memegang aturan penyaringannya di satu tempat — dipakai `MenuService`, `PlateColorService`, `ProductionDashboardService`, `ProductionItemService`, dan `ProductionPlanService`. Aturannya: baris milik brand outlet ikut, baris ber-`brand_id` NULL juga ikut, baris brand lain tidak. Outlet tanpa brand tidak menyaring apa pun. **Jangan tulis ulang aturan ini di service baru** — kalau ada dua versi, keduanya akan menyimpang pelan-pelan.
 
+### `Support\Uuid`
+Di PostgreSQL `uuid` adalah tipe sungguhan: membandingkannya dengan string sembarang melempar `22P02` — 500 dengan SQL bocor ke klien, bukan 404. Nilai id datang dari query string, body, dan segmen URL, jadi apa pun bisa masuk.
+
+Tiga aturan yang menyertainya:
+1. Setiap `exists:` pada tabel ber-primary-key uuid **harus** didahului rule `uuid`. Rule `exists` menjalankan query sendiri — tanpa penjaga, validatornya yang menjawab 500.
+2. Endpoint yang meneruskan id mentah ke `where()` harus memvalidasi bentuknya. Filter outlet yang salah bentuk dijawab 422, jangan diabaikan diam-diam — mengabaikan filter outlet berarti membocorkan data lintas outlet.
+3. `whereIn()` pada kolom uuid yang nilainya berasal dari kolom `varchar` (`production_items.plate_color`, `waste_records.plate_color`) harus disaring `Uuid::matches()` dulu.
+
+Dijaga `MalformedUuidInputTest`.
+
 ### `BaseAggregateService`
 Untuk agregat header+item (`ProductionPlan`+items, `SalesHeader`+items+details). Menyediakan `createItems()` / `syncItems()` yang bisa di-override — `SalesService` meng-override keduanya untuk menghitung ulang `selisih` dan mengelola level ketiga (`sales_item_details`).
 
@@ -75,6 +85,8 @@ Migration memakai macro `$table->fullstamps()` (mendefinisikan `created_by`/`upd
 `routes/api.php`. Ada macro `Route::crud($uri, $controller, $name)` di `RouteServiceProvider` yang meng-generate 5 route dan memetakannya ke method `{$name}Index`, `{$name}Store`, `{$name}Show`, `{$name}Update`, `{$name}Destroy` pada satu controller. Dipakai oleh `MasterController` untuk platecolor / menu / outlet / waste-reason.
 
 **Urutan route penting.** Route statis harus dideklarasikan sebelum wildcard `/{id}`, kalau tidak akan tertangkap `show()`. Sudah ada komentar peringatan di `routes/api.php` soal `/sales/by-date`.
+
+**Segmen id wajib dibatasi bentuknya.** Setiap route `{id}` memakai `->whereUuid('id')` — `users/{id}` memakai `->whereNumber('id')` karena `users.id` auto-increment. Tanpa itu `find('abc')` di kolom `uuid` menjawab 500 (`22P02`), bukan 404. Macro `Route::crud` sudah memasangnya sendiri. `MalformedUuidInputTest` menolak route bersegmen id yang tidak dibatasi.
 
 ### Status proteksi route
 **Semua** route domain ada di belakang `auth:api`. Yang tidak memakainya cuma tiga: `/login`, `/login-pin`, dan `/auth/refresh` — dua pertama memang pintu masuk, yang ketiga memvalidasi tokennya sendiri di controller (lihat bagian Auth). `/register` **bukan** route publik meski namanya terdengar begitu: ia kena `auth:api` + `role:admin`, karena menetapkan `role` dan `module_app` dari payload.
@@ -154,7 +166,8 @@ $this->service->plan           // ProductionPlanService       — plan CRUD
 $this->service->item           // ProductionItemService       — piring (inti)
 $this->service->wasteRecord    // WasteRecordService          — MENULIS waste_records
 $this->service->wasteReport    // WasteService                — MEMBACA laporan waste
-$this->service->backdateImport // ProductionBackdateImportService — impor CSV hari lalu
+$this->service->backdateImport   // ProductionBackdateImportService   — impor .xlsx/CSV hari lalu
+$this->service->backdateTemplate // ProductionBackdateTemplateService — template .xlsx impor tsb
 ```
 
 ### `Production/ProductionItemService`
@@ -172,7 +185,12 @@ Pusat aturan bisnis piring.
 Ketidakcocokan tipe `varchar` vs `uuid` ini muncul di beberapa tempat. `WasteAnalysisService` menghindarinya dengan tidak melakukan JOIN sama sekali dan meresolusi nama plate color di PHP — pola ini lebih portabel (test jalan di SQLite, produksi di PostgreSQL). **Ikuti pola itu untuk query baru.**
 
 ### `Production/ProductionBackdateImportService`
-Impor produksi hari lalu dari CSV — satu-satunya jalur yang boleh menulis `final_status` di luar hari produksi, karena itu `role:admin`. `preview()` hanya membaca (tiap baris membawa `errors[]`-nya sendiri), `import()` menulis dalam satu transaksi dan menolak seluruh berkas kalau ada satu baris salah. Atribusi waktunya mengikuti `autoWasteCarryOver()`: `sold_at`/`wasted_at`/`recorded_at` = `produced_at`, bukan `now()`. Kode menu diresolusi lewat brand outlet (`ResolvesOutletBrand`) karena `menus.code` unik per brand. Bentuk berkas didokumentasikan di [../docs/api-reference.md](../docs/api-reference.md).
+Impor produksi hari lalu dari .xlsx atau CSV — satu-satunya jalur yang boleh menulis `final_status` di luar hari produksi, karena itu `role:admin`. `preview()` hanya membaca (tiap baris membawa `errors[]`-nya sendiri), `import()` menulis dalam satu transaksi dan menolak seluruh berkas kalau ada satu baris salah. Atribusi waktunya mengikuti `autoWasteCarryOver()`: `sold_at`/`wasted_at`/`recorded_at` = `produced_at`, bukan `now()`. Kode menu diresolusi lewat brand outlet (`ResolvesOutletBrand`) karena `menus.code` unik per brand. Bentuk berkas didokumentasikan di [../docs/api-reference.md](../docs/api-reference.md).
+
+Format dikenali dari isi berkas (tanda tangan zip), bukan ekstensinya, lalu keduanya diubah jadi matriks string sebelum satu pemeriksa yang sama memegang header, batas, dan baris kosong — supaya .xlsx dan CSV tidak punya dua daftar aturan. Baris yang `date`, `quantity`, dan `final_status`-nya sama-sama kosong dilewati: template mengirim `menu_code` untuk semua menu aktif, jadi tanpa aturan itu menu yang tidak diproduksi jadi baris error.
+
+### `Production/ProductionBackdateTemplateService`
+Merakit workbook .xlsx berisi tiga sheet (data siap isi, panduan, daftar menu aktif) dengan `phpoffice/phpspreadsheet`. Menunya diambil lewat `ResolvesOutletBrand` — aturan brand yang sama dengan importer, supaya template tidak menawarkan menu yang justru ditolak saat diunggah. Angka di sheet panduan dibaca dari konstanta publik `ProductionBackdateImportService` (`MAX_ROWS`, `MAX_PLATES`, `MAX_AGE_DAYS`, `DEFAULT_TIME`, alias header/status), bukan diketik ulang. **Butuh ekstensi PHP `zip` dan `gd`** — keduanya dipasang di kedua stage `Dockerfile`.
 
 ### `ClosingReport/ClosingReportService`
 - `getData()` dan `submit()` sama-sama mensyaratkan `SalesHeader` dengan `status = 'submitted'` di tanggal yang sama, kalau tidak → `BusinessRuleException`.

@@ -38,12 +38,17 @@ class RouteServiceProvider extends ServiceProvider
         });
 
 
+        // `{id}` dibatasi bentuk uuid. Semua primary key domain bertipe uuid di
+        // PostgreSQL, dan `find('abc')` di kolom uuid bukan menghasilkan "tidak
+        // ketemu" melainkan 22P02 — 500 dengan SQL bocor ke klien. Dengan
+        // batasan ini segmen yang bentuknya salah tidak pernah cocok dengan
+        // route-nya, jadi jawabannya 404 seperti seharusnya.
         Route::macro('crud', function ($uri, $controller, $name) {
             Route::get("$uri",        [$controller, "{$name}Index"]);
             Route::post("$uri",       [$controller, "{$name}Store"]);
-            Route::get("$uri/{id}",   [$controller, "{$name}Show"]);
-            Route::put("$uri/{id}",   [$controller, "{$name}Update"]);
-            Route::delete("$uri/{id}",[$controller, "{$name}Destroy"]);
+            Route::get("$uri/{id}",   [$controller, "{$name}Show"])->whereUuid('id');
+            Route::put("$uri/{id}",   [$controller, "{$name}Update"])->whereUuid('id');
+            Route::delete("$uri/{id}",[$controller, "{$name}Destroy"])->whereUuid('id');
         });
     }
 }

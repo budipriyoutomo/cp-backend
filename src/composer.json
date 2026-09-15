@@ -12,6 +12,7 @@
         "laravel/tinker": "^2.8",
         "league/flysystem-aws-s3-v3": "^3.32",
         "php-amqplib/php-amqplib": "^2.8",
+        "phpoffice/phpspreadsheet": "^2.3",
         "tymon/jwt-auth": "^2.3"
     },
     "require-dev": {
@@ -62,6 +63,9 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
+        },
+        "platform": {
+            "php": "8.2.20"
         }
     },
     "minimum-stability": "stable",

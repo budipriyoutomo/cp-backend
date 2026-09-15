@@ -166,7 +166,7 @@ namespace App\Http\Controllers;
         public function closeDay(Request $request)
         {
             $request->validate([
-                'outletId' => ['required', 'exists:outlets,id'],
+                'outletId' => ['required', 'uuid', 'exists:outlets,id'],
             ]);
 
             $closed = $this->service->item->closeDaySold($request->outletId);

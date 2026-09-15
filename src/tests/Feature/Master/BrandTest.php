@@ -115,7 +115,10 @@ class BrandTest extends TestCase
     {
         $admin = $this->user('admin');
 
-        $this->actingAs($admin, 'api')->getJson('/api/master/brand/does-not-exist')
+        // Bentuknya harus uuid sah. Segmen `{id}` dibatasi di routes/api.php,
+        // jadi id yang bentuknya salah tidak pernah sampai ke controller — dan
+        // yang diuji di sini adalah id yang bentuknya benar tapi tidak ada.
+        $this->actingAs($admin, 'api')->getJson('/api/master/brand/00000000-0000-4000-8000-000000000000')
             ->assertStatus(404)
             ->assertJsonPath('status', false);
     }

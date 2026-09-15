@@ -20,7 +20,7 @@ class WasteController extends BaseApiController
     public function index(Request $request)
     {
         $request->validate([
-            'outletId' => ['required'],
+            'outletId' => ['required', 'uuid'],
             'date' => ['required', 'date'],
             'plateColorId' => ['nullable'],
         ]);
@@ -45,7 +45,7 @@ class WasteController extends BaseApiController
     public function summary(Request $request)
     {
         $request->validate([
-            'outletId' => ['required'],
+            'outletId' => ['required', 'uuid'],
             'date' => ['required', 'date'],
         ]);
 

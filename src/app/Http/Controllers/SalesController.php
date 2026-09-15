@@ -23,9 +23,27 @@ class SalesController extends BaseApiController
     // ==========================
     public function index(Request $request)
     {
+        $this->validateListFilters($request);
+
         return $this->resource(SalesResource::collection(
             $this->service->list($request)
         ));
+    }
+
+    /**
+     * `list()` meneruskan `?outlet_id=` apa adanya ke `where('outlet_id', ...)`,
+     * dan kolomnya bertipe uuid. Filter yang bentuknya salah harus dijawab 422
+     * di sini — bukan 500 dari PostgreSQL, dan bukan pula diam-diam diabaikan,
+     * karena mengabaikan filter outlet berarti mengembalikan data lintas outlet.
+     */
+    private function validateListFilters(Request $request): void
+    {
+        $request->validate([
+            'outlet_id'  => ['sometimes', 'uuid'],
+            'date'       => ['sometimes', 'date'],
+            'start_date' => ['sometimes', 'date'],
+            'end_date'   => ['sometimes', 'date'],
+        ]);
     }
 
     // ==========================
@@ -33,6 +51,8 @@ class SalesController extends BaseApiController
     // ==========================
     public function drafts(Request $request)
     {
+        $this->validateListFilters($request);
+
         return $this->resource(SalesDraftResource::collection(
             $this->service->list($request)
         ));
@@ -83,8 +103,10 @@ class SalesController extends BaseApiController
     // ==========================
     public function byDate(Request $request)
     {
+        // `outlets.id` bertipe uuid: tanpa aturan bentuk, `?outlet_id=abc`
+        // sampai ke query dan menjawab 500, bukan 422.
         $request->validate([
-            'outlet_id' => 'required',
+            'outlet_id' => ['required', 'uuid'],
             'date' => 'required|date'
         ]);
 

@@ -5,6 +5,7 @@ namespace App\Services\Production;
 use App\Models\PlateColors;
 use App\Models\ProductionItem;
 use App\Models\WasteRecord;
+use App\Support\Uuid;
 use Illuminate\Support\Facades\DB;
 
 class WasteService
@@ -87,8 +88,15 @@ class WasteService
         // come from the master table. Resolved in PHP rather than with a JOIN:
         // plate_colors.id is uuid while plate_color is varchar, and PostgreSQL
         // has no operator for that comparison. Same pattern as WasteAnalysisService.
+        // Disaring dulu lewat Uuid::matches: kolom sumbernya varchar, jadi satu
+        // baris warisan yang isinya nama warna (bukan uuid) cukup untuk membuat
+        // `whereIn` di kolom uuid melempar 22P02 dan mematikan seluruh ringkasan.
+        // Baris begitu tidak punya nama untuk diresolusi — fallback "Unknown"
+        // di bawah sudah menanganinya.
         $plateColorNames = PlateColors::query()
-            ->whereIn('id', $wasteByColor->pluck('plate_color')->filter()->all())
+            ->whereIn('id', $wasteByColor->pluck('plate_color')->filter(
+                fn ($value) => Uuid::matches($value)
+            )->all())
             ->pluck('platename', 'id');
 
         return [

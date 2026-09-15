@@ -4,6 +4,7 @@ namespace App\Services\Concerns;
 
 use App\Exceptions\BusinessRuleException;
 use App\Models\Outlet;
+use App\Support\Uuid;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -26,7 +27,7 @@ trait ResolvesOutletBrand
         // membandingkannya dengan string sembarang melempar "invalid input
         // syntax for type uuid" — 500, bukan 404. Nilai ini datang dari query
         // string `?outlet_id=`, jadi apa pun bisa masuk.
-        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $outletId)) {
+        if (! Uuid::matches($outletId)) {
             throw new BusinessRuleException("Outlet tidak ditemukan: {$outletId}", 404);
         }
 

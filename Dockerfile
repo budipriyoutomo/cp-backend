@@ -5,9 +5,13 @@ FROM php:8.2-fpm AS builder
 
 WORKDIR /var/www/html
 
+# gd dan zip dipasang untuk phpoffice/phpspreadsheet (template impor produksi
+# backdate): keduanya ada di daftar require paketnya, jadi tanpa ini `composer
+# install` di bawah gagal — bukan request pertama yang gagal.
 RUN apt-get update && apt-get install -y \
-    git unzip libzip-dev libpng-dev libxml2-dev libpq-dev \
-    && docker-php-ext-install pdo_pgsql pgsql zip opcache bcmath \
+    git unzip libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libxml2-dev libpq-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo_pgsql pgsql zip gd opcache bcmath \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -37,9 +41,14 @@ WORKDIR /var/www/html
 
 # `cron` sudah tidak dipasang: scheduler sekarang dijalankan supervisord lewat
 # `artisan schedule:work`. Lihat komentar di docker/supervisord.conf.
+# gd dan zip juga dipasang di sini, bukan hanya di builder: vendor/ disalin apa
+# adanya dari tahap sebelumnya, jadi ekstensi yang hilang di runtime baru
+# ketahuan sebagai 500 saat operator mengunduh template.
 RUN apt-get update && apt-get install -y \
     nginx supervisor curl libpq-dev redis-tools \
-    && docker-php-ext-install pdo pdo_pgsql pgsql opcache bcmath \
+    libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo pdo_pgsql pgsql zip gd opcache bcmath \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apt-get clean && rm -rf /var/lib/apt/lists/*

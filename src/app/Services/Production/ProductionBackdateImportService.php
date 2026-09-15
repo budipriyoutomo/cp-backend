@@ -11,9 +11,16 @@ use App\Services\Concerns\ResolvesOutletBrand;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\RichText\RichText;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
- * Import produksi hari lalu dari berkas CSV.
+ * Import produksi hari lalu dari berkas .xlsx atau CSV.
  *
  * Alasan modul ini ada: piring hanya bisa difinalisasi pada hari produksinya
  * (`ProductionItemService::assertWithinProductionDay()`), dan `production:close-stale`
@@ -61,15 +68,15 @@ class ProductionBackdateImportService extends BaseService
      * jam tengah malam membuat baris hasil impor terlihat seperti sisa hari
      * sebelumnya di layar mana pun yang menampilkan waktu.
      */
-    private const DEFAULT_TIME = '12:00';
+    public const DEFAULT_TIME = '12:00';
 
-    private const REQUIRED_HEADERS = ['date', 'menu_code', 'quantity', 'final_status'];
+    public const REQUIRED_HEADERS = ['date', 'menu_code', 'quantity', 'final_status'];
 
     /**
      * Nama kolom yang diterima selain nama kanoniknya. Berkas ini disusun
      * operator di Excel, dan judul kolomnya berbahasa Indonesia sama seringnya.
      */
-    private const HEADER_ALIASES = [
+    public const HEADER_ALIASES = [
         'tanggal'     => 'date',
         'kode_menu'   => 'menu_code',
         'menucode'    => 'menu_code',
@@ -84,7 +91,7 @@ class ProductionBackdateImportService extends BaseService
         'keterangan'  => 'notes',
     ];
 
-    private const STATUS_ALIASES = [
+    public const STATUS_ALIASES = [
         'sold'    => 'sold',
         'terjual' => 'sold',
         'jual'    => 'sold',
@@ -215,7 +222,7 @@ class ProductionBackdateImportService extends BaseService
      */
     private function analyze(UploadedFile $file, string $outletId): array
     {
-        $raw = $this->parseCsv($file);
+        $raw = $this->parseFile($file);
 
         if ($raw === []) {
             return [];
@@ -587,14 +594,152 @@ class ProductionBackdateImportService extends BaseService
 
     /*
     |--------------------------------------------------------------------------
+    | PEMBACAAN BERKAS
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Baca berkas jadi entri per baris, tanpa peduli formatnya.
+     *
+     * Dua format, satu aturan: CSV dan XLSX sama-sama diubah jadi matriks
+     * string lebih dulu, lalu `entriesFrom()` yang memegang header, batas, dan
+     * baris kosong. Kalau tiap format membawa aturannya sendiri, keduanya akan
+     * menyimpang — dan bedanya cuma terlihat sebagai "baris tidak valid" pada
+     * berkas yang isinya identik.
+     *
+     * @return array<int, array<string, string|int|null>>
+     */
+    private function parseFile(UploadedFile $file): array
+    {
+        ['header' => $header, 'rows' => $rows] = $this->isSpreadsheet($file)
+            ? $this->readSpreadsheet($file)
+            : $this->readCsv($file);
+
+        return $this->entriesFrom($header, $rows);
+    }
+
+    /**
+     * Isi berkas yang menentukan, bukan ekstensinya: berkas xlsx selalu diawali
+     * tanda tangan zip. Operator yang menyimpan CSV dengan nama .xlsx (atau
+     * sebaliknya) tetap terbaca benar — dan yang salah benar-benar salah.
+     */
+    private function isSpreadsheet(UploadedFile $file): bool
+    {
+        $path = $file->getRealPath();
+
+        if (! $path) {
+            return false;
+        }
+
+        $handle = @fopen($path, 'rb');
+
+        if ($handle === false) {
+            return false;
+        }
+
+        try {
+            return fread($handle, 4) === "PK\x03\x04";
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * @param  array<int, string|null>  $header
+     * @param  array<int, array{line: int, values: array<int, string>}>  $rows
+     * @return array<int, array<string, string|int|null>>
+     */
+    private function entriesFrom(array $header, array $rows): array
+    {
+        $missing = array_diff(self::REQUIRED_HEADERS, $header);
+
+        if ($missing !== []) {
+            throw new BusinessRuleException(
+                'Kolom wajib tidak ada di header: ' . implode(', ', $missing) . '. '
+                . 'Header yang terbaca: ' . (implode(', ', array_filter($header)) ?: '(kosong)') . '.'
+            );
+        }
+
+        $entries = [];
+
+        foreach ($rows as $row) {
+            if ($this->isBlankRow($row['values'])) {
+                continue;
+            }
+
+            $entry = ['line' => $row['line']];
+
+            foreach ($header as $index => $column) {
+                if ($column === null) {
+                    continue;
+                }
+
+                $entry[$column] = isset($row['values'][$index])
+                    ? trim((string) $row['values'][$index])
+                    : null;
+            }
+
+            // Template mengirim berkas dengan `menu_code` sudah terisi untuk
+            // semua menu aktif, jadi baris yang tidak dipakai tetap membawa
+            // kode. Yang menentukan baris itu dipakai atau tidak adalah tiga
+            // kolom isian — tanpa aturan ini, setiap menu yang tidak diproduksi
+            // hari itu muncul sebagai baris error dan impornya batal.
+            if ($this->isUnfilledRow($entry)) {
+                continue;
+            }
+
+            if (count($entries) >= self::MAX_ROWS) {
+                throw new BusinessRuleException(
+                    'Berkas melebihi ' . self::MAX_ROWS . ' baris data. Pecah per periode.'
+                );
+            }
+
+            $entries[] = $entry;
+        }
+
+        $plates = array_sum(array_map(
+            fn ($row) => (int) preg_replace('/\D/', '', (string) ($row['quantity'] ?? 0)),
+            $entries
+        ));
+
+        if ($plates > self::MAX_PLATES) {
+            throw new BusinessRuleException(
+                "Berkas ini akan membuat {$plates} baris piring, di atas batas "
+                . self::MAX_PLATES . '. Pecah per periode.'
+            );
+        }
+
+        return $entries;
+    }
+
+    /**
+     * Baris yang belum diisi sama sekali: tidak ada tanggal, jumlah, maupun
+     * status. `menu_code` dan `notes` sengaja tidak ikut dinilai — keduanya bisa
+     * datang dari template tanpa berarti barisnya dipakai.
+     *
+     * @param  array<string, string|int|null>  $entry
+     */
+    private function isUnfilledRow(array $entry): bool
+    {
+        foreach (['date', 'quantity', 'final_status'] as $column) {
+            if (trim((string) ($entry[$column] ?? '')) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | CSV
     |--------------------------------------------------------------------------
     */
 
     /**
-     * @return array<int, array<string, string|int|null>>
+     * @return array{header: array<int, string|null>, rows: array<int, array{line: int, values: array<int, string>}>}
      */
-    private function parseCsv(UploadedFile $file): array
+    private function readCsv(UploadedFile $file): array
     {
         $path   = $file->getRealPath();
         $handle = $path ? @fopen($path, 'r') : false;
@@ -615,15 +760,6 @@ class ProductionBackdateImportService extends BaseService
                 str_getcsv(rtrim($this->stripBom($headerLine), "\r\n"), $delimiter)
             );
 
-            $missing = array_diff(self::REQUIRED_HEADERS, $header);
-
-            if ($missing !== []) {
-                throw new BusinessRuleException(
-                    'Kolom wajib tidak ada di header: ' . implode(', ', $missing) . '. '
-                    . 'Header yang terbaca: ' . (implode(', ', array_filter($header)) ?: '(kosong)') . '.'
-                );
-            }
-
             $rows = [];
             $line = 1;
 
@@ -632,42 +768,17 @@ class ProductionBackdateImportService extends BaseService
 
                 // fgetcsv mengembalikan [null] untuk baris kosong. Baris kosong
                 // di akhir berkas itu normal dari Excel, bukan kesalahan data.
-                if ($values === [null] || $this->isBlankRow($values)) {
+                if ($values === [null]) {
                     continue;
                 }
 
-                if (count($rows) >= self::MAX_ROWS) {
-                    throw new BusinessRuleException(
-                        'Berkas melebihi ' . self::MAX_ROWS . ' baris data. Pecah per periode.'
-                    );
-                }
-
-                $entry = ['line' => $line];
-
-                foreach ($header as $index => $column) {
-                    if ($column === null) {
-                        continue;
-                    }
-
-                    $entry[$column] = isset($values[$index]) ? trim((string) $values[$index]) : null;
-                }
-
-                $rows[] = $entry;
+                $rows[] = [
+                    'line'   => $line,
+                    'values' => array_map(fn ($value) => (string) $value, $values),
+                ];
             }
 
-            $plates = array_sum(array_map(
-                fn ($row) => (int) preg_replace('/\D/', '', (string) ($row['quantity'] ?? 0)),
-                $rows
-            ));
-
-            if ($plates > self::MAX_PLATES) {
-                throw new BusinessRuleException(
-                    "Berkas ini akan membuat {$plates} baris piring, di atas batas "
-                    . self::MAX_PLATES . '. Pecah per periode.'
-                );
-            }
-
-            return $rows;
+            return ['header' => $header, 'rows' => $rows];
         } finally {
             fclose($handle);
         }
@@ -692,6 +803,150 @@ class ProductionBackdateImportService extends BaseService
 
         return $candidates[$best] > 0 ? $best : ',';
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | XLSX
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Berkas .xlsx dari template. Sheet-nya bisa lebih dari satu — template
+     * sendiri membawa panduan dan daftar menu — jadi yang dipakai adalah sheet
+     * pertama yang header-nya memuat semua kolom wajib, bukan sheet pertama
+     * begitu saja. Operator yang mengunggah sambil membuka sheet panduan tetap
+     * mengimpor data yang benar.
+     *
+     * `setReadDataOnly()` sengaja tidak dinyalakan: tanpa format angka, sel
+     * tanggal Excel kembali sebagai bilangan (45678) dan tiap barisnya jadi
+     * "tanggal tidak dikenali".
+     *
+     * @return array{header: array<int, string|null>, rows: array<int, array{line: int, values: array<int, string>}>}
+     */
+    private function readSpreadsheet(UploadedFile $file): array
+    {
+        $path = $file->getRealPath();
+
+        if (! $path) {
+            throw new BusinessRuleException('Berkas Excel tidak bisa dibaca.');
+        }
+
+        try {
+            $reader = IOFactory::createReaderForFile($path);
+            $reader->setReadEmptyCells(false);
+
+            $spreadsheet = $reader->load($path);
+        } catch (\Throwable $exception) {
+            throw new BusinessRuleException(
+                'Berkas Excel tidak bisa dibaca. Simpan ulang sebagai .xlsx atau .csv lalu coba lagi.'
+            );
+        }
+
+        try {
+            $sheet  = $this->sheetWithRequiredHeaders($spreadsheet);
+            $header = $this->normalizeHeader($this->rowValues($sheet, 1));
+
+            $rows       = [];
+            $highestRow = $sheet->getHighestDataRow();
+
+            for ($line = 2; $line <= $highestRow; $line++) {
+                $rows[] = ['line' => $line, 'values' => $this->rowValues($sheet, $line)];
+            }
+
+            return ['header' => $header, 'rows' => $rows];
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+        }
+    }
+
+    private function sheetWithRequiredHeaders(Spreadsheet $spreadsheet): Worksheet
+    {
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            $header = $this->normalizeHeader($this->rowValues($sheet, 1));
+
+            if (array_diff(self::REQUIRED_HEADERS, $header) === []) {
+                return $sheet;
+            }
+        }
+
+        // Tidak ada yang cocok: kembalikan sheet pertama supaya pesan errornya
+        // datang dari pemeriksaan header yang sama dengan jalur CSV — satu
+        // kalimat, bukan dua yang berbeda untuk kesalahan yang sama.
+        return $spreadsheet->getSheet(0);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function rowValues(Worksheet $sheet, int $row): array
+    {
+        $lastColumn = Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
+
+        $values = [];
+
+        for ($column = 1; $column <= $lastColumn; $column++) {
+            $values[] = $this->cellValue($sheet->getCell([$column, $row]));
+        }
+
+        return $values;
+    }
+
+    /**
+     * Isi sel sebagai string, dengan dua perkara yang hanya ada di Excel:
+     * tanggal/jam disimpan sebagai bilangan pecahan, dan angka bulat kembali
+     * sebagai float. Keduanya harus dinormalkan di sini — validator di atas
+     * hanya mengenal teks.
+     */
+    private function cellValue(Cell $cell): string
+    {
+        $value = $cell->getValue();
+
+        if ($value instanceof RichText) {
+            $value = $value->getPlainText();
+        }
+
+        if (is_string($value) && str_starts_with($value, '=')) {
+            try {
+                $value = $cell->getCalculatedValue();
+            } catch (\Throwable) {
+                $value = null;
+            }
+        }
+
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        if (is_numeric($value) && ExcelDate::isDateTime($cell)) {
+            $moment = ExcelDate::excelToDateTimeObject((float) $value);
+
+            // Serial di bawah 1 tidak punya bagian tanggal sama sekali — itu
+            // sel jam, dan mengembalikannya sebagai tanggal 1899 akan menolak
+            // kolom `time` yang isinya benar.
+            return ((float) $value) < 1
+                ? $moment->format('H:i')
+                : $moment->format('Y-m-d');
+        }
+
+        if (is_float($value)) {
+            // (string) 12.0 menghasilkan "12", yang memang yang dibutuhkan
+            // kolom quantity. Pecahan tetap terbawa apa adanya supaya 12.5
+            // ditolak validator, bukan dibulatkan diam-diam.
+            return rtrim(rtrim(sprintf('%.4F', $value), '0'), '.');
+        }
+
+        return trim((string) $value);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HEADER
+    |--------------------------------------------------------------------------
+    */
 
     /**
      * @param  array<int, string|null>  $header

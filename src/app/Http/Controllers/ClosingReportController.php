@@ -22,6 +22,13 @@ class ClosingReportController extends BaseApiController
 
     public function index(Request $request)
     {
+        // `list()` meneruskan `?outletId=` apa adanya ke `where('outlet_id', ...)`
+        // dan kolomnya bertipe uuid — bentuk yang salah menjawab 500, bukan 422.
+        $request->validate([
+            'outletId' => ['sometimes', 'uuid'],
+            'date'     => ['sometimes', 'date'],
+        ]);
+
         return $this->resource(
             ClosingReportResource::collection($this->service->list($request))
         );

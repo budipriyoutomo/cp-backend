@@ -5,6 +5,7 @@ namespace App\Services\Reports;
 use App\Models\PlateColors;
 use App\Models\ProductionItem;
 use App\Models\WasteRecord;
+use App\Support\Uuid;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -42,8 +43,13 @@ class WasteAnalysisService
             ->pluck('total', 'plate_color');
 
         // ── Plate color master (name + price), keyed by id.
+        // Disaring lewat Uuid::matches dengan alasan yang sama seperti di
+        // WasteService: sumbernya kolom varchar, dan satu nilai non-uuid cukup
+        // untuk membuat `whereIn` di kolom uuid melempar 22P02.
         $plateColors = PlateColors::query()
-            ->whereIn('id', $wasteByColor->pluck('plate_color_id')->filter()->all())
+            ->whereIn('id', $wasteByColor->pluck('plate_color_id')->filter(
+                fn ($value) => Uuid::matches($value)
+            )->all())
             ->get()
             ->keyBy('id');
 

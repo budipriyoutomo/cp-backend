@@ -91,7 +91,7 @@ Route::prefix('master')
         Route::get('/outlet', [MasterController::class, 'outletindex']);
         Route::get('/waste-reason', [MasterController::class, 'wastereasonindex']);
         Route::get('/brand', [MasterController::class, 'brandindex']);
-        Route::get('/brand/{id}', [MasterController::class, 'brandshow']);
+        Route::get('/brand/{id}', [MasterController::class, 'brandshow'])->whereUuid('id');
 
     });
 
@@ -103,8 +103,8 @@ Route::prefix('users')
     ->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::post('/', [UserController::class, 'store']);
-        Route::put('/{id}', [UserController::class, 'update']);
-        Route::delete('/{id}', [UserController::class, 'destroy']);
+        Route::put('/{id}', [UserController::class, 'update'])->whereNumber('id');
+        Route::delete('/{id}', [UserController::class, 'destroy'])->whereNumber('id');
     });
 
 // ======================================================
@@ -156,6 +156,7 @@ Route::prefix('production')
 Route::prefix('production')
     ->middleware(['auth:api', 'outlet.access', 'role:admin', 'module:admin'])
     ->group(function () {
+        Route::get('/import-backdate/template', [ProductionImportController::class, 'template']);
         Route::post('/import-backdate/preview', [ProductionImportController::class, 'preview']);
         Route::post('/import-backdate', [ProductionImportController::class, 'store']);
     });
@@ -184,7 +185,7 @@ Route::prefix('sales')
     // NOTE: static routes must be declared before the /{id} wildcard, otherwise
     // /sales/by-date is captured by show() with id = "by-date".
     Route::get('/by-date', [SalesController::class, 'byDate']);
-    Route::get('/{id}', [SalesController::class, 'show']);
+    Route::get('/{id}', [SalesController::class, 'show'])->whereUuid('id');
 });
 
 // `operation` menyusun dan menandatangani; `report` membacanya di
@@ -196,10 +197,10 @@ Route::prefix('closing-reports')
     Route::get('/data', [ClosingReportController::class, 'data']);
     Route::post('/submit', [ClosingReportController::class, 'submit']);
     Route::post('/upload-photos', [ClosingReportController::class, 'uploadWastePhotos']);
-    Route::get('/{id}', [ClosingReportController::class, 'show']);
+    Route::get('/{id}', [ClosingReportController::class, 'show'])->whereUuid('id');
 
     // Deleting a signed-off report is the one destructive action in this group.
-    Route::delete('/{id}', [ClosingReportController::class, 'destroy'])
+    Route::delete('/{id}', [ClosingReportController::class, 'destroy'])->whereUuid('id')
         ->middleware('role:admin,manager');
 });
 
@@ -211,5 +212,5 @@ Route::prefix('waste')
 
     Route::get('/', [WasteController::class, 'index']);
     Route::get('/summary', [WasteController::class, 'summary']);
-    Route::get('/{waste}', [WasteController::class, 'show']);
+    Route::get('/{waste}', [WasteController::class, 'show'])->whereUuid('waste');
 });

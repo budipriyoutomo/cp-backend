@@ -12,6 +12,10 @@ use App\Http\Requests\Master\WasteReasonRequest;
 use App\Http\Resources\Master\WasteReasonResource;
 use App\Http\Requests\Master\BrandRequest;
 use App\Http\Resources\Master\BrandResource;
+use App\Http\Requests\Master\TimeMarkerRequest;
+use App\Http\Resources\Master\TimeMarkerResource;
+use App\Http\Requests\Master\TimeSlotRequest;
+use App\Http\Resources\Master\TimeSlotResource;
 
 
 use App\Services\MasterService;
@@ -242,6 +246,136 @@ class MasterController extends BaseApiController
     {
         $this->service->wasteReason->delete($id);
         return $this->success(null, 'Waste reason deleted');
+    }
+
+    // ======================================================
+    // TIME MARKER METHODS
+    //
+    // `show()` ditulis untuk keduanya, tidak seperti master lain: Route::crud
+    // mendaftarkan GET /{id} untuk semuanya, dan tanpa method-nya endpoint itu
+    // menjawab 500. Lihat komentar di brandshow().
+    // ======================================================
+
+    public function timemarkerindex(Request $request)
+    {
+        return $this->resource(
+            TimeMarkerResource::collection($this->service->timeMarker->list($request))
+        );
+    }
+
+    public function timemarkershow($id)
+    {
+        $marker = $this->service->timeMarker->find($id);
+
+        if (!$marker) {
+            return $this->error('Time marker not found', 404);
+        }
+
+        return $this->resource(new TimeMarkerResource($marker));
+    }
+
+    public function timemarkerstore(TimeMarkerRequest $request)
+    {
+        return $this->resource(
+            new TimeMarkerResource(
+                $this->service->timeMarker->create($request->validated())
+            ),
+            'Time marker created',
+            201
+        );
+    }
+
+    public function timemarkerupdate(TimeMarkerRequest $request, $id)
+    {
+        return $this->resource(
+            new TimeMarkerResource(
+                $this->service->timeMarker->update($id, $request->validated())
+            ),
+            'Time marker updated'
+        );
+    }
+
+    public function timemarkerdestroy($id)
+    {
+        $this->service->timeMarker->delete($id);
+        return $this->success(null, 'Time marker deleted');
+    }
+
+    // ======================================================
+    // TIME SLOT METHODS
+    // ======================================================
+
+    public function timeslotindex(Request $request)
+    {
+        return $this->resource(
+            TimeSlotResource::collection($this->service->timeSlot->list($request))
+        );
+    }
+
+    public function timeslotshow($id)
+    {
+        $slot = $this->service->timeSlot->find($id);
+
+        if (!$slot) {
+            return $this->error('Time slot not found', 404);
+        }
+
+        return $this->resource(new TimeSlotResource($slot));
+    }
+
+    public function timeslotstore(TimeSlotRequest $request)
+    {
+        return $this->resource(
+            new TimeSlotResource(
+                $this->service->timeSlot->create($request->validated())
+            ),
+            'Time slot created',
+            201
+        );
+    }
+
+    public function timeslotupdate(TimeSlotRequest $request, $id)
+    {
+        return $this->resource(
+            new TimeSlotResource(
+                $this->service->timeSlot->update($id, $request->validated())
+            ),
+            'Time slot updated'
+        );
+    }
+
+    public function timeslotdestroy($id)
+    {
+        $this->service->timeSlot->delete($id);
+        return $this->success(null, 'Time slot deleted');
+    }
+
+    /**
+     * Ringkasan siklus penanda untuk satu outlet.
+     *
+     * Dipisahkan dari daftar slot karena jawabannya bukan daftar: layar setelan
+     * memakainya untuk memperingatkan kalau penanda yang sama berulang lebih
+     * cepat daripada umur piring terpanjang — masalah yang melahirkan fitur ini.
+     *
+     * Type-hint Illuminate ditulis lengkap: berkas ini meng-import `Request`
+     * milik Symfony di atas, dan `validate()` tidak ada di sana.
+     */
+    public function timesettingssummary(\Illuminate\Http\Request $request)
+    {
+        // Dua pemanggil, dua sudut pandang. Layar dapur hanya tahu outletnya;
+        // halaman setelan admin bekerja per brand dan tidak punya outlet sama
+        // sekali. Salah satu wajib ada — tanpa keduanya, jawabannya hanya bisa
+        // berupa tebakan.
+        $request->validate([
+            'outlet_id' => ['required_without:brand_id', 'uuid'],
+            'brand_id'  => ['required_without:outlet_id', 'uuid', 'exists:brands,id'],
+        ]);
+
+        $summary = $request->filled('brand_id')
+            ? $this->service->timeSlot->markerCycleSummary($request->query('brand_id'))
+            : $this->service->timeSlot->summaryForOutlet($request->query('outlet_id'));
+
+        return $this->success($summary);
     }
 
 }

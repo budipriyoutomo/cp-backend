@@ -54,6 +54,7 @@ class MalformedUuidInputTest extends TestCase
             'waste index'         => ['/api/waste?outletId=abc&date=2026-06-17'],
             'waste summary'       => ['/api/waste/summary?outletId=abc&date=2026-06-17'],
             'data closing report' => ['/api/closing-reports/data?outletId=abc&date=2026-06-17'],
+            'baca plan produksi'  => ['/api/production/plan?outletId=abc&date=2026-06-17'],
         ];
     }
 

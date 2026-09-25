@@ -49,6 +49,17 @@ Subclass cukup mendeklarasikan `$model`, `$relations`, `$searchable`, `$sortable
 ### `Services\Concerns\ResolvesOutletBrand`
 Satu outlet melayani satu brand, jadi pemanggil cukup tahu outlet. Trait ini memegang aturan penyaringannya di satu tempat — dipakai `MenuService`, `PlateColorService`, `ProductionDashboardService`, `ProductionItemService`, dan `ProductionPlanService`. Aturannya: baris milik brand outlet ikut, baris ber-`brand_id` NULL juga ikut, baris brand lain tidak. Outlet tanpa brand tidak menyaring apa pun. **Jangan tulis ulang aturan ini di service baru** — kalau ada dua versi, keduanya akan menyimpang pelan-pelan.
 
+### `Master\TimeSlotService` + `TimeMarkerService`
+Setelan waktu per brand: time slot produksi dan penanda waktu yang menempel ke piring. Diatur di `/admin/brand-settings`, dibaca layar planning, conveyor, dan expired.
+
+Tiga hal yang membedakannya dari master lain:
+
+- **Penyaringan `?outlet_id=` memakai `ScopesToOutletBrandStrictly`, bukan `scopeToBrand()`.** Kelonggaran "baris ber-`brand_id` NULL terlihat semua outlet" tidak berlaku di sini — kolomnya NOT NULL, dan outlet tanpa brand harus menerima daftar kosong. Kalau tidak, layar planning menampilkan jam kembar dari semua brand.
+- **Tumpang tindih jam divalidasi di request**, bukan index. Index hanya menangkap jam mulai yang sama persis.
+- **`markerCycleSummary()`** mencari jarak terpendek antara dua slot berpenanda sama, lalu membandingkannya dengan `shelf_life` terpanjang brand itu. Hasilnya peringatan, bukan penolakan.
+
+`production_plans.time_slot` **tidak** menunjuk tabel ini — ia tetap teks dan hanya divalidasi isinya. Lihat [../docs/data-model.md](../docs/data-model.md) untuk alasannya.
+
 ### `Support\Uuid`
 Di PostgreSQL `uuid` adalah tipe sungguhan: membandingkannya dengan string sembarang melempar `22P02` — 500 dengan SQL bocor ke klien, bukan 404. Nilai id datang dari query string, body, dan segmen URL, jadi apa pun bisa masuk.
 
@@ -225,6 +236,16 @@ Karena test berjalan di SQLite tapi produksi di PostgreSQL: **selalu beri alias 
 `Dockerfile` multi-stage: stage builder hanya menjalankan `composer install --no-dev`; stage runtime menyalin hasilnya ke image nginx + php-fpm + supervisor.
 
 **Cache config dibangun saat container start, bukan saat build.** `docker/entrypoint.sh` menjalankan `config:cache` + `route:cache` + `view:cache` setelah environment masuk, lalu `exec supervisord`. Urutan ini penting: config yang di-cache mengalahkan environment variable, jadi meng-cache sebelum env ada akan membekukan nilai yang salah secara diam-diam. Konsekuensinya, **mengubah environment variable butuh restart container**, bukan sekadar reload.
+
+**Deploy tidak pernah menjalankan `migrate`.** `entrypoint.sh` hanya membangun cache; tidak ada `migrate` di Dockerfile, compose, maupun supervisor. Jadi setiap migration baru akan diam-diam tertinggal sampai ada yang menjalankannya sendiri — dan gejalanya bukan pesan "belum di-migrate", melainkan 500 dari kolom yang bentuknya tidak sesuai kode. Ini yang terjadi pada perbaikan kolom userstamp: kodenya sudah naik, skemanya belum.
+
+Urutannya selalu: **`migrate` dulu, baru kode frontend.** Backend dibuat menerima payload lama selama mungkin, tapi tidak sebaliknya.
+
+```bash
+docker compose exec api php artisan migrate:status
+docker compose exec api php artisan migrate --pretend   # lihat SQL-nya dulu
+docker compose exec api php artisan migrate --force
+```
 
 `src/.env` **tidak** ikut ke dalam image (`.dockerignore`). Kredensial masuk saat runtime lewat `env_file: ./src/.env` di `docker-compose.yml`, jadi file `.env` produksi harus ada di server. Blok `environment:` di compose menang atas `env_file`.
 

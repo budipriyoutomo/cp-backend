@@ -23,6 +23,10 @@ class PlateColorRequest extends BaseRequest
     {
         return [
             'platename'        => ['required', 'string', 'max:100', $this->uniqueWithinBrand('plate_colors', 'platename')],
+            // Warna tampil badge. Nullable: baris lama boleh belum punya, dan
+            // badge jatuh ke warna cadangan. Bentuk pendek '#RGB' ditolak
+            // supaya penyimpanan seragam.
+            'color_hex'        => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'brand_id'         => $this->brandIdRules(),
             'price'            => 'required|numeric|min:0',
             'description'      => 'nullable|string|max:255',
@@ -38,6 +42,7 @@ class PlateColorRequest extends BaseRequest
     {
         return [
             'platename'        => ['required', 'string', 'max:100', $this->uniqueWithinBrand('plate_colors', 'platename', $this->route('id'))],
+            'color_hex'        => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'brand_id'         => $this->brandIdRules(),
             'price'            => 'required|numeric|min:0',
             'description'      => 'nullable|string|max:255',

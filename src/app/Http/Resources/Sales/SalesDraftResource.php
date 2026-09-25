@@ -18,6 +18,13 @@ class SalesDraftResource extends BaseResource
                 return $this->items->map(function ($item) {
 
                     return [
+                        // `platecolor` adalah NAMA warna, untuk ditampilkan.
+                        // Id-nya dikirim terpisah karena layar Sales Input
+                        // mengirim balik item draft ke `POST /sales`, dan
+                        // `plate_color_id` di sana wajib uuid — dulu layar itu
+                        // memakai nama sebagai id, dan submit dari draft yang
+                        // dibuka ulang ditolak ("Blue" bukan uuid).
+                        'plate_color_id' => $item->plate_color_id,
                         'platecolor' => optional($item->platecolor)->platename,
 
                         'price' => (float) optional($item->platecolor)->price,

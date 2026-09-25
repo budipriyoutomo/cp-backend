@@ -72,6 +72,11 @@ Route::prefix('master')
             Route::crud('waste-reason', MasterController::class, 'wastereason');
             Route::crud('brand', MasterController::class, 'brand');
 
+            // Setelan waktu per brand. Menulisnya admin saja, sama seperti
+            // master lain — ia menentukan apa yang dilihat seluruh dapur.
+            Route::crud('time-marker', MasterController::class, 'timemarker');
+            Route::crud('time-slot', MasterController::class, 'timeslot');
+
         });
 
         // Baca master TIDAK dipagari role maupun modul, dan itu disengaja.
@@ -92,6 +97,17 @@ Route::prefix('master')
         Route::get('/waste-reason', [MasterController::class, 'wastereasonindex']);
         Route::get('/brand', [MasterController::class, 'brandindex']);
         Route::get('/brand/{id}', [MasterController::class, 'brandshow'])->whereUuid('id');
+
+        // Setelan waktu dibaca layar planning, conveyor, dan expired — modul
+        // dapur, bukan admin. Sama seperti master lain di blok ini: yang
+        // sensitif adalah menulisnya, dan itu dijaga grup di atas.
+        //
+        // Didaftarkan SESUDAH Route::crud di atas dengan sengaja. Route dengan
+        // method+uri sama saling menimpa di RouteCollection, dan yang terakhir
+        // menang — itulah cara master lain membuka bacanya.
+        Route::get('/time-marker', [MasterController::class, 'timemarkerindex']);
+        Route::get('/time-slot', [MasterController::class, 'timeslotindex']);
+        Route::get('/time-settings/summary', [MasterController::class, 'timesettingssummary']);
 
     });
 

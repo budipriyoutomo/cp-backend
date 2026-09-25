@@ -41,6 +41,14 @@ namespace App\Http\Controllers;
         */
         public function plan(Request $request)
         {
+            // Terlewat dari sapuan known-issues #28: `outletId` masuk mentah ke
+            // `where('outlet_id', ...)` dan kolomnya uuid, jadi bentuk yang
+            // salah menjawab 500 dengan SQL bocor, bukan 422.
+            $request->validate([
+                'outletId' => ['required', 'uuid'],
+                'date'     => ['required', 'date'],
+            ]);
+
             $data = $this->service->plan->getPlanFormatted(
                 $request->outletId,
                 $request->date

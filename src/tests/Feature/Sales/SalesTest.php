@@ -127,6 +127,45 @@ class SalesTest extends TestCase
             ]);
     }
 
+    /**
+     * Layar Sales Input mengirim balik item draft ke `POST /sales`, dan di sana
+     * `plate_color_id` wajib uuid. Draft dulu hanya membawa `platecolor` — nama
+     * warna — dan layar memakainya sebagai id, jadi submit dari draft yang
+     * dibuka ulang ditolak. Id-nya harus ikut, terpisah dari nama.
+     */
+    public function test_draft_items_carry_the_plate_color_id_not_just_its_name(): void
+    {
+        $this->postJson('/api/sales', $this->salesPayload())->assertStatus(201);
+
+        $item = \App\Models\SalesItem::with('plateColor')->sole();
+
+        $this->getJson('/api/sales')
+            ->assertOk()
+            ->assertJsonPath('data.0.items.0.plate_color_id', $item->plate_color_id)
+            ->assertJsonPath('data.0.items.0.platecolor', $item->plateColor->platename);
+    }
+
+    /**
+     * Ujung ke ujung: item draft yang dibaca harus bisa dikirim balik apa adanya.
+     */
+    public function test_a_reloaded_draft_can_be_submitted(): void
+    {
+        $payload = $this->salesPayload();
+        $this->postJson('/api/sales', $payload)->assertStatus(201);
+
+        $draftItem = $this->getJson('/api/sales')->json('data.0.items.0');
+
+        $this->postJson('/api/sales', array_merge($payload, [
+            'status' => 'submitted',
+            'items'  => [[
+                'plate_color_id'   => $draftItem['plate_color_id'],
+                'pos_sold'         => $draftItem['pos'],
+                'production_sold'  => $draftItem['sold'],
+                'production_waste' => $draftItem['waste'],
+            ]],
+        ]))->assertSuccessful()->assertJsonPath('data.status', 'submitted');
+    }
+
     public function test_show_returns_sales_with_items(): void
     {
         $this->postJson('/api/sales', $this->salesPayload())->assertStatus(201);

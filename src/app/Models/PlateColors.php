@@ -8,6 +8,9 @@ class PlateColors extends BaseModel
 
     protected $fillable = [
         'platename',
+        // Warna tampil badge, '#RRGGBB'. Nullable: baris lama yang namanya tidak
+        // dikenal peta warna lama tetap kosong dan jatuh ke warna cadangan.
+        'color_hex',
         'brand_id',
         'price',
         'description',

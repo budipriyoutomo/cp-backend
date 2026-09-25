@@ -41,6 +41,64 @@ class PlateColorTest extends TestCase
         $this->assertDatabaseHas('plate_colors', ['platename' => 'Merah']);
     }
 
+    /**
+     * Warna badge sekarang data, bukan peta nama yang dikunci mati di frontend.
+     *
+     * Nama bukan kunci yang sah: dua brand boleh sama-sama punya "Merah", dan
+     * tidak ada yang menjamin keduanya ingin rona yang sama. `plate-colors.ts`
+     * membaca field ini apa adanya, jadi namanya ikut dikunci di sini.
+     */
+    public function test_color_hex_round_trips_through_create_and_update(): void
+    {
+        $admin = $this->user('admin');
+
+        $id = $this->actingAs($admin, 'api')->postJson('/api/master/platecolor', [
+            'platename' => 'Merah',
+            'price'     => 15000,
+            'color_hex' => '#EF4444',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.color_hex', '#EF4444')
+            ->json('data.id');
+
+        $this->actingAs($admin, 'api')->putJson("/api/master/platecolor/{$id}", [
+            'platename' => 'Merah',
+            'price'     => 15000,
+            'color_hex' => '#123456',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.color_hex', '#123456');
+
+        $this->assertDatabaseHas('plate_colors', ['id' => $id, 'color_hex' => '#123456']);
+    }
+
+    /** Kosong berarti "pakai warna cadangan", bukan warna hitam. */
+    public function test_color_hex_may_be_left_empty(): void
+    {
+        $admin = $this->user('admin');
+
+        $this->actingAs($admin, 'api')->postJson('/api/master/platecolor', [
+            'platename' => 'Motif Sakura',
+            'price'     => 15000,
+            'color_hex' => null,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.color_hex', null);
+    }
+
+    public function test_color_hex_must_be_six_digit_hex(): void
+    {
+        $admin = $this->user('admin');
+
+        foreach (['merah', '#FFF', 'EF4444'] as $bad) {
+            $this->actingAs($admin, 'api')->postJson('/api/master/platecolor', [
+                'platename' => 'Warna ' . $bad,
+                'price'     => 15000,
+                'color_hex' => $bad,
+            ])->assertStatus(422)->assertJsonValidationErrors(['color_hex']);
+        }
+    }
+
     public function test_create_validation_requires_platename_and_price(): void
     {
         $admin = $this->user('admin');

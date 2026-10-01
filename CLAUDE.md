@@ -191,7 +191,7 @@ Pusat aturan bisnis piring.
 | `markSold()` / `markWaste()` | Dilindungi `assertWithinProductionDay()` — lempar `BusinessRuleException` kalau ada id dari hari sebelumnya. |
 | `autoWasteCarryOver()` | Menutup piring hari lalu jadi waste. `wasted_at` = `produced_at`, **bukan** `now()`. Juga menulis `WasteRecord`. |
 | `countUnresolved()` | Gerbang untuk "Get Data POS". |
-| `getSoldItem()` / `getWasteItem()` | Join ke `plate_colors` dengan cast `plate_colors.id::text` — karena `production_items.plate_color` bertipe `varchar` sementara `plate_colors.id` bertipe `uuid`. |
+| `totalsByPlateColor()` | Jumlah piring per `plate_color` yang ditutup di tanggal itu (`sold_at` / `wasted_at`). Tanpa JOIN — nama warna diresolusi pemanggil (`POSService::reconcile()`). |
 
 Ketidakcocokan tipe `varchar` vs `uuid` ini muncul di beberapa tempat. `WasteAnalysisService` menghindarinya dengan tidak melakukan JOIN sama sekali dan meresolusi nama plate color di PHP — pola ini lebih portabel (test jalan di SQLite, produksi di PostgreSQL). **Ikuti pola itu untuk query baru.**
 

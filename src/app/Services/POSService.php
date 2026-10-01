@@ -2,16 +2,22 @@
 
 namespace App\Services;
 
+use App\Exceptions\BusinessRuleException;
 use App\Models\POSData;
 use App\Models\PlateColors;
 use App\Models\Outlet;
+use App\Services\Production\ProductionItemService;
+use App\Support\Uuid;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 class POSService
 {
     public function __construct(
-        public POSData $posData
+        public POSData $posData,
+        protected ProductionItemService $productionItems,
     ) {}
 
     public function getPosDataForClosing($outletId, $date)
@@ -21,6 +27,85 @@ class POSService
             ->where('date', $date)
             ->with('plateColor')
             ->get();
+    }
+
+    /**
+     * Angka POS vs produksi per plate color — sumber layar Sales Input.
+     *
+     * Dua gerbang dijalankan duluan: piring hari lalu yang tertinggal ditutup
+     * jadi waste (diatribusikan ke hari produksinya), lalu tanggal ini ditolak
+     * kalau masih ada piring tanpa `final_status` — angkanya belum final.
+     *
+     * @return Collection<int, array{plateColorId:string, plateColorName:string, posSold:int, productionSold:int, productionWaste:int, selisih:int}>
+     */
+    public function reconcile(string $outletId, string $date): Collection
+    {
+        $date = Carbon::parse($date)->toDateString();
+
+        $this->productionItems->autoWasteCarryOver($outletId);
+
+        $pending = $this->productionItems->countUnresolved($outletId, $date);
+
+        if ($pending > 0) {
+            throw new BusinessRuleException(
+                "Masih ada {$pending} plate yang belum ditandai sold/waste untuk tanggal ini. "
+                . 'Selesaikan dulu semua plate di Conveyor sebelum mengambil data POS.'
+            );
+        }
+
+        $pos = $this->posData
+            ->where('outlet_id', $outletId)
+            ->where('date', $date)
+            ->groupBy('plate_color_id')
+            ->selectRaw('plate_color_id, SUM(sold) as total')
+            ->pluck('total', 'plate_color_id');
+
+        $sold  = $this->productionItems->totalsByPlateColor($outletId, $date, 'sold_at');
+        $waste = $this->productionItems->totalsByPlateColor($outletId, $date, 'wasted_at');
+
+        $ids = $pos->keys()->merge($sold->keys())->merge($waste->keys())->unique()->values();
+
+        // Nama diresolusi di PHP, bukan lewat JOIN: `production_items.plate_color`
+        // bertipe varchar sementara `plate_colors.id` uuid, dan cast `::text`
+        // hanya jalan di PostgreSQL. `Uuid::matches` menjaga `whereIn` dari
+        // nilai varchar yang bukan uuid (22P02). `withTrashed` — warna yang
+        // sudah dihapus tetap punya penjualan di hari-hari sebelumnya.
+        $names = PlateColors::withTrashed()
+            ->whereIn('id', $ids->filter(fn ($id) => Uuid::matches($id))->all())
+            ->pluck('platename', 'id');
+
+        $this->assertKnownPlateColors($ids, $names);
+
+        return $ids->map(function (string $id) use ($pos, $sold, $waste, $names) {
+            $posSold        = (int) ($pos[$id] ?? 0);
+            $productionSold = (int) ($sold[$id] ?? 0);
+
+            return [
+                'plateColorId'    => $id,
+                'plateColorName'  => $names[$id],
+                'posSold'         => $posSold,
+                'productionSold'  => $productionSold,
+                'productionWaste' => (int) ($waste[$id] ?? 0),
+                'selisih'         => $posSold - $productionSold,
+            ];
+        })->values();
+    }
+
+    /**
+     * Versi lama membuang baris seperti ini diam-diam: JOIN-nya menghasilkan
+     * id NULL, lalu tersaring keluar — dan angka produksi yang direkonsiliasi
+     * jadi kurang tanpa ada yang tahu. Lebih baik berhenti dengan pesan jelas.
+     */
+    private function assertKnownPlateColors(Collection $ids, Collection $names): void
+    {
+        $unknown = $ids->reject(fn ($id) => $names->has($id))->values();
+
+        if ($unknown->isNotEmpty()) {
+            throw new BusinessRuleException(
+                'Ada plate color yang tidak dikenal di master: ' . $unknown->implode(', ')
+                . '. Rapikan data produksi tanggal ini sebelum mengambil data POS.'
+            );
+        }
     }
 
     public function storeFromEvent(array $data)

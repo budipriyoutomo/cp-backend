@@ -116,9 +116,10 @@ class SalesTest extends TestCase
 
     public function test_drafts_lists_sales_with_pagination(): void
     {
-        $this->postJson('/api/sales', $this->salesPayload())->assertStatus(201);
+        $payload = $this->salesPayload();
+        $this->postJson('/api/sales', $payload)->assertStatus(201);
 
-        $this->getJson('/api/sales')
+        $this->getJson('/api/sales?outlet_id=' . $payload['outlet_id'])
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonStructure([
@@ -135,11 +136,12 @@ class SalesTest extends TestCase
      */
     public function test_draft_items_carry_the_plate_color_id_not_just_its_name(): void
     {
-        $this->postJson('/api/sales', $this->salesPayload())->assertStatus(201);
+        $payload = $this->salesPayload();
+        $this->postJson('/api/sales', $payload)->assertStatus(201);
 
         $item = \App\Models\SalesItem::with('plateColor')->sole();
 
-        $this->getJson('/api/sales')
+        $this->getJson('/api/sales?outlet_id=' . $payload['outlet_id'])
             ->assertOk()
             ->assertJsonPath('data.0.items.0.plate_color_id', $item->plate_color_id)
             ->assertJsonPath('data.0.items.0.platecolor', $item->plateColor->platename);
@@ -153,7 +155,7 @@ class SalesTest extends TestCase
         $payload = $this->salesPayload();
         $this->postJson('/api/sales', $payload)->assertStatus(201);
 
-        $draftItem = $this->getJson('/api/sales')->json('data.0.items.0');
+        $draftItem = $this->getJson('/api/sales?outlet_id=' . $payload['outlet_id'])->json('data.0.items.0');
 
         $this->postJson('/api/sales', array_merge($payload, [
             'status' => 'submitted',
@@ -164,6 +166,72 @@ class SalesTest extends TestCase
                 'production_waste' => $draftItem['waste'],
             ]],
         ]))->assertSuccessful()->assertJsonPath('data.status', 'submitted');
+    }
+
+    /**
+     * Layar Sales Input mengirim `outletId`, bukan `outlet_id`. Filternya dulu
+     * hanya membaca `outlet_id`, jadi dialog "Get Sales Draft" menampilkan sales
+     * semua outlet — dan draft outlet lain bisa ter-submit ke outlet aktif.
+     */
+    public function test_drafts_are_scoped_to_the_requested_outlet(): void
+    {
+        $bandung = $this->salesPayload();
+        $this->postJson('/api/sales', $bandung)->assertStatus(201);
+
+        $jakarta = $this->createOutlet(['code' => 'JKT', 'name' => 'Jakarta']);
+        $this->postJson('/api/sales', array_merge($bandung, ['outlet_id' => $jakarta->id]))
+            ->assertStatus(201);
+
+        foreach (['outletId', 'outlet_id'] as $key) {
+            $this->getJson("/api/sales?{$key}={$jakarta->id}")
+                ->assertOk()
+                ->assertJsonCount(1, 'data')
+                ->assertJsonPath('data.0.outlet_name', 'Jakarta');
+        }
+    }
+
+    public function test_drafts_require_an_outlet(): void
+    {
+        $this->getJson('/api/sales')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['outletId', 'outlet_id']);
+    }
+
+    public function test_drafts_filter_by_status(): void
+    {
+        $payload = $this->salesPayload();
+        $this->postJson('/api/sales', $payload)->assertStatus(201);
+
+        $query = '/api/sales?outletId=' . $payload['outlet_id'];
+
+        $this->getJson($query . '&status=draft')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson($query . '&status=submitted')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson($query . '&status=bogus')->assertStatus(422);
+    }
+
+    /**
+     * `POST /sales` untuk outlet+tanggal yang sama membuat ulang item beserta
+     * rinciannya dari payload. Draft yang dibuka ulang harus membawa rinciannya,
+     * kalau tidak, menyimpannya lagi akan menghapus rincian itu.
+     */
+    public function test_draft_items_carry_their_menu_details(): void
+    {
+        $payload = $this->salesPayload();
+        $this->postJson('/api/sales', $payload)->assertStatus(201);
+
+        $detail = $payload['items'][0]['details'][0];
+
+        $this->getJson('/api/sales?outletId=' . $payload['outlet_id'])
+            ->assertOk()
+            ->assertJsonPath('data.0.items.0.details', [[
+                'menu_id'        => $detail['menu_id'],
+                'menu_name'      => $detail['menu_name'],
+                'total_produced' => 8,
+                'total_sold'     => 5,
+                'total_wasted'   => 1,
+                'adjustment'     => 0,
+                'compensation'   => 0,
+            ]]);
     }
 
     public function test_show_returns_sales_with_items(): void

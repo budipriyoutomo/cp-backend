@@ -62,7 +62,7 @@ class ResponseEnvelopeTest extends TestCase
             ->assertJsonPath('status', true);
 
         // Listing goes through resource() too, paginator meta included.
-        $this->getJson('/api/sales')
+        $this->getJson('/api/sales?outlet_id=' . $outlet->id)
             ->assertOk()
             ->assertJsonStructure(['status', 'message', 'data', 'meta'])
             ->assertJsonPath('status', true);

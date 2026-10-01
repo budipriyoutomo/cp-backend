@@ -444,32 +444,28 @@ class ProductionItemService extends BaseService
             return $items->count();
         });
     }
-    public function getSoldItem($outletId, $date)
+    /**
+     * Jumlah piring per `plate_color` yang ditutup pada tanggal itu, dibaca
+     * dari kolom stempel penutupnya (`sold_at` atau `wasted_at`).
+     *
+     * Sengaja tanpa JOIN ke `plate_colors` — nama diresolusi pemanggil. Versi
+     * lamanya memakai cast `plate_colors.id::text` (khusus PostgreSQL), jadi
+     * jalur sukses Get Data POS tidak pernah bisa diuji di SQLite.
+     *
+     * @return \Illuminate\Support\Collection<string, int> plate_color => total
+     */
+    public function totalsByPlateColor(string $outletId, string $date, string $closedColumn)
     {
-        return $this->query() 
-            ->leftJoin('plate_colors', DB::raw('plate_colors.id::text'), '=', 'production_items.plate_color')
-            ->where('production_items.outlet_id', $outletId)
-            ->whereDate('production_items.sold_at', $date)
-            ->groupBy('plate_colors.id', 'plate_colors.platename')
-            ->get([
-                'plate_colors.id as plate_color_id',
-                'plate_colors.platename as plate_color_name',
-                DB::raw('SUM(production_items.quantity) as quantity'),
-            ]);
-    }
+        if (!in_array($closedColumn, ['sold_at', 'wasted_at'], true)) {
+            throw new \InvalidArgumentException("Kolom penutup tidak dikenal: {$closedColumn}");
+        }
 
-    public function getWasteItem($outletId, $date)
-    {
-        return $this->query() 
-            ->leftJoin('plate_colors', DB::raw('plate_colors.id::text'), '=', 'production_items.plate_color')
-            ->where('production_items.outlet_id', $outletId)
-            ->whereDate('production_items.wasted_at', $date)
-            ->groupBy('plate_colors.id', 'plate_colors.platename')
-            ->get([
-                'plate_colors.id as plate_color_id',
-                'plate_colors.platename as plate_color_name',
-                DB::raw('SUM(production_items.quantity) as quantity'),
-            ]);
+        return ProductionItem::query()
+            ->where('outlet_id', $outletId)
+            ->whereDate($closedColumn, $date)
+            ->groupBy('plate_color')
+            ->selectRaw('plate_color, SUM(quantity) as total')
+            ->pluck('total', 'plate_color');
     }
  
     public function getProductionMenuDetail(

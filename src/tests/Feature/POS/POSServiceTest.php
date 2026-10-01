@@ -11,10 +11,9 @@ use Tests\TestCase;
 /**
  * Covers the testable core of the POS module: POSService.
  *
- * The /api/reports/pos-data endpoint and the rabbit:consume-posdata command are
- * not exercised here — the former relies on PostgreSQL-only SQL (plate_colors.id::text
- * casts in ProductionItemService), and the latter is an AMQP consumer loop whose only
- * business logic is POSService::storeFromEvent(), tested directly below.
+ * The /api/reports/pos-data endpoint (POSService::reconcile) is covered by
+ * POSReconcileEndpointTest. The rabbit:consume-posdata command is an AMQP consumer
+ * loop whose only business logic is POSService::storeFromEvent(), tested directly below.
  */
 class POSServiceTest extends TestCase
 {

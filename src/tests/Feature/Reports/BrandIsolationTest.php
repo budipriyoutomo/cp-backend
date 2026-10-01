@@ -172,15 +172,31 @@ class BrandIsolationTest extends TestCase
     // POS COMPARISON — sumber angka untuk sales input
     // ==================================================================
 
-    /**
-     * Lewat service, bukan lewat /api/reports/pos-data.
-     *
-     * Endpoint itu memanggil ProductionItemService::getSoldItem(), yang meng-JOIN
-     * dengan cast `plate_colors.id::text` — sintaks khusus PostgreSQL yang tidak
-     * jalan di SQLite. Batasan lama yang sudah dicatat di POSServiceTest, bukan
-     * soal brand. Bagian yang memang mau diuji di sini — pemetaan POS ke warna —
-     * ada di POSService dan tidak butuh JOIN itu.
-     */
+    public function test_pos_data_endpoint_keeps_two_brands_apart(): void
+    {
+        $date = '2026-08-14';
+
+        foreach ([[$this->bandung, $this->merahMaharasa, 4], [$this->surabaya, $this->merahKatsuri, 9]] as [$outlet, $color, $sold]) {
+            POSData::create([
+                'id' => (string) Str::uuid(),
+                'plate_color_id' => $color->id,
+                'outlet_id' => $outlet->id,
+                'date' => $date,
+                'sold' => $sold,
+            ]);
+        }
+        $this->produce($this->bandung, $this->menuMaharasa, $this->merahMaharasa, 3, $date, 'sold');
+        $this->produce($this->surabaya, $this->menuKatsuri, $this->merahKatsuri, 7, $date, 'sold');
+
+        $this->getJson("/api/reports/pos-data?outletId={$this->bandung->id}&date={$date}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            // Nama warnanya identik di kedua brand — yang membedakan hanya id.
+            ->assertJsonPath('data.0.plateColorId', $this->merahMaharasa->id)
+            ->assertJsonPath('data.0.posSold', 4)
+            ->assertJsonPath('data.0.productionSold', 3);
+    }
+
     public function test_pos_data_for_closing_keeps_two_brands_apart(): void
     {
         $date = '2026-08-14';

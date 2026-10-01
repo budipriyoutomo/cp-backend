@@ -38,8 +38,16 @@ class SalesController extends BaseApiController
      */
     private function validateListFilters(Request $request): void
     {
+        // Daftar sales wajib satu outlet. Layar Sales Input mengirim `outletId`,
+        // padahal filternya dulu hanya membaca `outlet_id` — jadi dialog "Get
+        // Sales Draft" menampilkan sales semua outlet, dan draft outlet lain
+        // bisa di-load lalu ter-submit ke outlet yang sedang aktif. Kedua nama
+        // diterima, dengan urutan yang sama seperti `OutletAccess`, supaya
+        // outlet yang diperiksa izinnya adalah outlet yang disaring.
         $request->validate([
-            'outlet_id'  => ['sometimes', 'uuid'],
+            'outletId'   => ['required_without:outlet_id', 'uuid'],
+            'outlet_id'  => ['required_without:outletId', 'uuid'],
+            'status'     => ['sometimes', 'in:draft,submitted'],
             'date'       => ['sometimes', 'date'],
             'start_date' => ['sometimes', 'date'],
             'end_date'   => ['sometimes', 'date'],

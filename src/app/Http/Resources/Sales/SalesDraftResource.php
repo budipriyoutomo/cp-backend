@@ -36,6 +36,22 @@ class SalesDraftResource extends BaseResource
                         'adjustment' => (int) ($item->adjustment ?? 0),
                         'compensation' => (int) ($item->compensation ?? 0),
                         'selisih' => (int) ($item->selisih ?? 0),
+
+                        // Rincian per menu wajib ikut. `POST /sales` untuk
+                        // outlet+tanggal yang sama membuat ulang item — dan
+                        // rinciannya — dari payload, jadi draft yang dibuka
+                        // ulang tanpa rincian akan menghapusnya saat disimpan.
+                        'details' => $item->relationLoaded('details')
+                            ? $item->details->map(fn ($detail) => [
+                                'menu_id'        => $detail->menu_id,
+                                'menu_name'      => (string) $detail->menu_name,
+                                'total_produced' => (int) $detail->total_produced,
+                                'total_sold'     => (int) $detail->total_sold,
+                                'total_wasted'   => (int) $detail->total_wasted,
+                                'adjustment'     => (int) ($detail->adjustment ?? 0),
+                                'compensation'   => (int) ($detail->compensation ?? 0),
+                            ])->values()
+                            : [],
                     ];
                 });
             }),

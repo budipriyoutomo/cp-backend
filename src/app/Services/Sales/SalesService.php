@@ -262,8 +262,12 @@ class SalesService extends BaseAggregateService
         // ==========================
         // FILTER KHUSUS
         // ==========================
-        if ($request->filled('outlet_id')) {
-            $query->where('outlet_id', $request->outlet_id);
+        // Urutan kunci sama dengan OutletAccess: outlet yang disaring harus
+        // outlet yang sudah diperiksa izinnya. Wajib — divalidasi controller.
+        $query->where('outlet_id', $request->query('outletId') ?? $request->query('outlet_id'));
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->query('status'));
         }
 
         if ($request->filled('date')) {

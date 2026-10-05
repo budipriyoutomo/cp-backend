@@ -10,6 +10,7 @@ use App\Http\Controllers\POSController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\WasteController;
 use App\Http\Controllers\ClosingReportController;
+use App\Http\Controllers\ClosingReportOutboxController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\UserController;
 
@@ -202,6 +203,16 @@ Route::prefix('sales')
     // /sales/by-date is captured by show() with id = "by-date".
     Route::get('/by-date', [SalesController::class, 'byDate']);
     Route::get('/{id}', [SalesController::class, 'show'])->whereUuid('id');
+});
+
+// Layar admin "Kirim Ulang BI". Prefix closing-reports, tapi modul admin —
+// sama seperti import backdate. Dideklarasikan sebelum grup di bawah supaya
+// `/outbox` tidak pernah dibaca sebagai `/{id}`.
+Route::prefix('closing-reports/outbox')
+    ->middleware(['auth:api', 'outlet.access', 'role:admin', 'module:admin'])
+    ->group(function () {
+    Route::get('/', [ClosingReportOutboxController::class, 'index']);
+    Route::post('/{id}/resend', [ClosingReportOutboxController::class, 'resend'])->whereUuid('id');
 });
 
 // `operation` menyusun dan menandatangani; `report` membacanya di

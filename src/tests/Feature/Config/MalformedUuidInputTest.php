@@ -51,6 +51,7 @@ class MalformedUuidInputTest extends TestCase
             'sales by date'       => ['/api/sales/by-date?outlet_id=abc&date=2026-06-17'],
             'daftar sales'        => ['/api/sales?outlet_id=abc'],
             'daftar closing'      => ['/api/closing-reports?outletId=abc'],
+            'daftar kirim BI'     => ['/api/closing-reports/outbox?outletId=abc'],
             'waste index'         => ['/api/waste?outletId=abc&date=2026-06-17'],
             'waste summary'       => ['/api/waste/summary?outletId=abc&date=2026-06-17'],
             'data closing report' => ['/api/closing-reports/data?outletId=abc&date=2026-06-17'],

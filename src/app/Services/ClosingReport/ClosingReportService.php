@@ -23,7 +23,13 @@ class ClosingReportService extends BaseService
         'sales.items.plateColor',
         'sales.items.details.menu.plateColor',
         'entries.plateColor',
+        'outbox',
     ];
+
+    public function __construct(
+        private readonly ClosingReportOutboxService $outbox,
+    ) {
+    }
 
     public function list(Request $request): LengthAwarePaginator
     {
@@ -81,22 +87,7 @@ class ClosingReportService extends BaseService
             }
             
 
-            $report = ClosingReport::firstOrCreate(
-                [
-                    'outlet_id' => $outletId,
-                    'date' => Carbon::parse($date)->toDateString(),
-                ],
-                [
-                    'sales_id' => $salesHeader->id,
-                    'status' => 'draft',
-                ]
-            );
-
-            if (!$report->sales_id) {
-                $report->update([
-                    'sales_id' => $salesHeader->id,
-                ]);
-            }
+            $report = $this->findOrCreateReport($outletId, $date, $salesHeader);
 
             if ($report->status === 'submitted') {
                 return $this->show($report->id);
@@ -111,9 +102,14 @@ class ClosingReportService extends BaseService
     }
  
 
+    /**
+     * Pesan ke BI diantre di dalam transaksi tapi baru dikirim setelah commit:
+     * submit yang di-rollback tidak boleh sempat mengirim apa pun. Broker yang
+     * mati tidak menggagalkan submit — publish() mencatatnya untuk dicoba ulang.
+     */
     public function submit(array $data): ClosingReport
     {
-        return DB::transaction(function () use ($data) {
+        $pending = DB::transaction(function () use ($data) {
 
             $salesHeader = SalesHeader::with('items')
                 ->where('outlet_id', $data['outletId'])
@@ -129,22 +125,7 @@ class ClosingReportService extends BaseService
                 );
             }
 
-            $report = ClosingReport::firstOrCreate(
-                [
-                    'outlet_id' => $data['outletId'],
-                    'date' => Carbon::parse($data['date'])->toDateString(),
-                ],
-                [
-                    'sales_id' => $salesHeader->id,
-                    'status' => 'draft',
-                ]
-            );
-
-            if (!$report->sales_id) {
-                $report->update([
-                    'sales_id' => $salesHeader->id,
-                ]);
-            }
+            $report = $this->findOrCreateReport($data['outletId'], $data['date'], $salesHeader);
 
             if ($report->status === 'submitted') {
                 throw new BusinessRuleException(
@@ -167,8 +148,14 @@ class ClosingReportService extends BaseService
                 'submitted_by' => auth()->id(),
             ]);
 
-            return $this->show($report->id);
+            return $this->outbox->enqueue($report);
         });
+
+        $this->outbox->publish($pending);
+
+        // Dimuat ulang setelah publish supaya publishStatus di respons adalah
+        // hasil kiriman ini, bukan `pending` dari dalam transaksi.
+        return $this->show($pending->closing_report_id);
     }
 
 
@@ -185,6 +172,39 @@ class ClosingReportService extends BaseService
         return $report;
     }
   
+    /**
+     * Cari report outlet/hari itu, atau buat draft-nya.
+     *
+     * Dicari dengan whereDate, bukan firstOrCreate(['date' => 'Y-m-d']): cast
+     * `date` menyimpan 'Y-m-d 00:00:00', yang di SQLite tidak sama dengan
+     * 'Y-m-d' — pencarian meleset, lalu INSERT menabrak unique (outlet_id, date)
+     * dan submit ulang dijawab 500, bukan 409. PostgreSQL kebetulan lolos
+     * karena kolomnya bertipe date.
+     */
+    private function findOrCreateReport(string $outletId, string $date, SalesHeader $salesHeader): ClosingReport
+    {
+        $day = Carbon::parse($date)->toDateString();
+
+        $report = ClosingReport::where('outlet_id', $outletId)
+            ->whereDate('date', $day)
+            ->first();
+
+        if (! $report) {
+            return ClosingReport::create([
+                'outlet_id' => $outletId,
+                'date'      => $day,
+                'sales_id'  => $salesHeader->id,
+                'status'    => 'draft',
+            ]);
+        }
+
+        if (! $report->sales_id) {
+            $report->update(['sales_id' => $salesHeader->id]);
+        }
+
+        return $report;
+    }
+
     private function buildOperationalEntries(
         ClosingReport $report
     ): array {

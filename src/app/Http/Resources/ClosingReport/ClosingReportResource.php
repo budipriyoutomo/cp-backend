@@ -55,6 +55,9 @@ class ClosingReportResource extends BaseResource
             'updatedAt' => $this->updated_at?->toDateTimeString(),
             'submittedAt' => $this->submitted_at?->toDateTimeString(),
             'submittedBy' => $this->submitted_by,
+            // Status kirim ke BI (pending/published/failed). null = belum ada
+            // pesan: masih draft, atau disubmit sebelum fitur publish ada.
+            'publishStatus' => $this->relationLoaded('outbox') ? $this->outbox?->status : null,
         ];
     }
 }

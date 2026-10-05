@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ClosingReport extends BaseModel
 {
@@ -41,5 +42,10 @@ class ClosingReport extends BaseModel
     public function entries(): HasMany
     {
         return $this->hasMany(ClosingReportEntry::class, 'closing_report_id');
+    }
+
+    public function outbox(): HasOne
+    {
+        return $this->hasOne(ClosingReportOutbox::class, 'closing_report_id');
     }
 }

@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use PhpAmqpLib\Connection\AMQPStreamConnection;
 use Illuminate\Support\Facades\Log;
 use App\Models\FailedPosMessage;
+use App\Services\Messaging\RabbitConnectionFactory;
 use App\Services\POSService;
 
 class RabbitConsumePOSData extends Command
@@ -13,7 +13,7 @@ class RabbitConsumePOSData extends Command
     protected $signature = 'rabbit:consume-posdata';
     protected $description = 'Consume POS data from RabbitMQ';
 
-    public function handle(POSService $posService)
+    public function handle(POSService $posService, RabbitConnectionFactory $connections)
     {
         $this->info('🚀 Worker started, waiting for messages...');
         $this->info('📡 Connecting...');
@@ -24,23 +24,8 @@ class RabbitConsumePOSData extends Command
         while (true) {
             try {
 
-                // 🔥 CONNECT (with heartbeat + keepalive)
-                $connection = new AMQPStreamConnection(
-                    config('rabbitmq.host'),
-                    config('rabbitmq.port'),
-                    config('rabbitmq.user'),
-                    config('rabbitmq.password'),
-                    config('rabbitmq.vhost'),
-                    false,
-                    'AMQPLAIN',
-                    null,
-                    'en_US',
-                    10.0,
-                    180.0,
-                    null,
-                    false,
-                    30
-                );
+                // 🔥 CONNECT (with heartbeat) — resepnya di RabbitConnectionFactory
+                $connection = $connections->make();
 
                 $channel = $connection->channel();
 

@@ -28,6 +28,12 @@ class Kernel extends ConsoleKernel
         $schedule->command('production:refresh-belt-status')
             ->everyMinute()
             ->withoutOverlapping();
+
+        // Kirim ulang closing report ke BI yang tertahan karena broker mati
+        // saat submit. Jeda per baris diatur outbox, bukan jadwal ini.
+        $schedule->command('closing-report:publish-pending')
+            ->everyMinute()
+            ->withoutOverlapping();
     }
 
     /**

@@ -73,6 +73,18 @@ Dijaga `MalformedUuidInputTest`.
 ### `BaseAggregateService`
 Untuk agregat header+item (`ProductionPlan`+items, `SalesHeader`+items+details). Menyediakan `createItems()` / `syncItems()` yang bisa di-override — `SalesService` meng-override keduanya untuk menghitung ulang `selisih` dan mengelola level ketiga (`sales_item_details`).
 
+### `Services\Messaging` — kirim pesan ke RabbitMQ
+- `RabbitConnectionFactory` — satu-satunya resep koneksi, dipakai consumer POS **dan** publisher. Jangan `new AMQPStreamConnection` di tempat lain.
+- `MessagePublisher` (interface) → `RabbitMessagePublisher`. Kembali tanpa exception **hanya** kalau broker mengonfirmasi (publisher confirms) dan merutekan pesan ke minimal satu queue (`mandatory`); selain itu `MessagePublishException`. Di test, pakai `Tests\Fakes\FakeMessagePublisher::swap()`.
+
+Pemakai pertamanya closing report ke BI, lewat pola **outbox**:
+1. `ClosingReportOutboxService::enqueue()` di **dalam** transaksi submit — payload dari `ClosingReportPayloadBuilder` disimpan di `closing_report_outbox`.
+2. `publish()` **setelah** commit. Tidak pernah melempar; gagal → `markFailed()` + jadwal ulang (1, 2, 4, … maks 60 menit).
+3. `closing-report:publish-pending` (scheduler tiap menit) mengirim baris yang jatuh tempo sampai `rabbitmq.closing_report.max_attempts`.
+4. Lewat batas itu, admin mengirim manual dari layar `/admin/bi-sync` (`ClosingReportOutboxController`) atau `publish-pending --id`. Keduanya lewat `ClosingReportOutboxService::resend()` — satu aturan: abaikan jadwal dan batas, tolak (409) yang sudah terkirim.
+
+Mau mengirim event lain? Ikuti pola yang sama: tabel outbox sendiri, enqueue dalam transaksi, publish setelah commit. Memanggil publisher langsung di dalam transaksi berarti pesan bisa terkirim untuk data yang kemudian di-rollback.
+
 ---
 
 ## Traits Model
@@ -115,6 +127,7 @@ Migration memakai macro `$table->fullstamps()` (mendefinisikan `created_by`/`upd
 | `/sales/*` | — | `operation` |
 | `/closing-reports/*` | — | `operation,report` |
 | `DELETE /closing-reports/{id}` | `admin,manager` | `operation,report` |
+| `/closing-reports/outbox/*` (Kirim Ulang BI) | `admin` | `admin` |
 | `/waste/*` | — | `production` |
 
 **Baca master sengaja tanpa gerbang apa pun.** `OutletProvider` memanggil `/master/outlet` di layout **setiap** modul, dan layar production maupun kitchen menyaring menu lewat plate color. Gerbang lamanya `role:admin,kitchen` membuat role `manager`, `operation`, dan `production` dijawab 403 di sini — selector outlet kosong, seluruh modul mereka berhenti mengambil data, tanpa pesan apa pun. Yang sensitif adalah menulisnya. Batas datanya tetap ada lewat `outlet.access`.

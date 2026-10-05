@@ -83,6 +83,8 @@ class RouteProtectionTest extends TestCase
             'POST /closing-reports/upload'   => ['post', '/api/closing-reports/upload-photos'],
             'GET /closing-reports/{id}'      => ['get', '/api/closing-reports/' . self::SOME_UUID],
             'DELETE /closing-reports/{id}'   => ['delete', '/api/closing-reports/' . self::SOME_UUID],
+            'GET /closing-reports/outbox'    => ['get', '/api/closing-reports/outbox'],
+            'POST /closing-reports/outbox/{id}/resend' => ['post', '/api/closing-reports/outbox/' . self::SOME_UUID . '/resend'],
 
             // production — import backdate (prefix production, modul admin)
             'POST /production/import-backdate' => ['post', '/api/production/import-backdate'],

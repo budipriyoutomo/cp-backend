@@ -2,8 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Exceptions\BusinessRuleException;
 use App\Models\ClosingReportOutbox;
 use App\Services\ClosingReport\ClosingReportOutboxService;
+use App\Services\ClosingReport\ClosingReportPayloadBuilder;
 use App\Support\Uuid;
 use Illuminate\Console\Command;
 
@@ -20,6 +22,7 @@ class PublishPendingClosingReports extends Command
      */
     protected $signature = 'closing-report:publish-pending
                             {--id= : Kirim satu baris outbox saja (UUID), meski sudah lewat batas atau belum jatuh tempo}
+                            {--rebuild : Bersama --id: susun ulang payload dari data laporan lalu kirim, meski sudah terkirim (untuk pesan yang ditolak BI)}
                             {--limit=100 : Maksimal baris per putaran}
                             {--dry-run : Tampilkan apa yang akan dikirim, tanpa mengirim}';
 
@@ -34,6 +37,12 @@ class PublishPendingClosingReports extends Command
 
         if ($id = $this->option('id')) {
             return $this->publishOne($service, $id);
+        }
+
+        if ($this->option('rebuild')) {
+            $this->error('--rebuild hanya bisa dipakai bersama --id.');
+
+            return self::FAILURE;
         }
 
         $rows = ClosingReportOutbox::due($maxAttempts)
@@ -92,6 +101,10 @@ class PublishPendingClosingReports extends Command
             return self::FAILURE;
         }
 
+        if ($this->option('rebuild')) {
+            return $this->rebuildOne($service, $row);
+        }
+
         if ($row->status === ClosingReportOutbox::STATUS_PUBLISHED) {
             $this->info("Baris {$id} sudah terkirim pada {$row->published_at}, tidak dikirim ulang.");
 
@@ -115,6 +128,39 @@ class PublishPendingClosingReports extends Command
         }
 
         $this->error("Baris {$id} gagal: {$row->last_error}");
+
+        return self::FAILURE;
+    }
+
+    private function rebuildOne(ClosingReportOutboxService $service, ClosingReportOutbox $row): int
+    {
+        $before = count($row->payload['data']['items'] ?? []);
+
+        if ($this->option('dry-run')) {
+            $report = $row->closingReport;
+            $after = $report ? count(app(ClosingReportPayloadBuilder::class)->build($report)['data']['items']) : 0;
+            $this->line("{$row->id}  report {$row->closing_report_id}  items {$before} → {$after}");
+            $this->info('Payload akan disusun ulang lalu dikirim (dry run, tidak ada yang diubah).');
+
+            return self::SUCCESS;
+        }
+
+        try {
+            $row = $service->resend($service->rebuild($row));
+        } catch (BusinessRuleException $e) {
+            $this->error("Baris {$row->id} tidak disusun ulang: {$e->getMessage()}");
+
+            return self::FAILURE;
+        }
+        $after = count($row->payload['data']['items'] ?? []);
+
+        if ($row->status === ClosingReportOutbox::STATUS_PUBLISHED) {
+            $this->info("Baris {$row->id} disusun ulang (items {$before} → {$after}) dan terkirim.");
+
+            return self::SUCCESS;
+        }
+
+        $this->error("Baris {$row->id} disusun ulang (items {$before} → {$after}) tapi gagal terkirim: {$row->last_error}");
 
         return self::FAILURE;
     }

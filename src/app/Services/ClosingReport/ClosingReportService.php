@@ -148,14 +148,19 @@ class ClosingReportService extends BaseService
                 'submitted_by' => auth()->id(),
             ]);
 
-            return $this->outbox->enqueue($report);
+            return [$report->id, $this->outbox->enqueue($report)];
         });
 
-        $this->outbox->publish($pending);
+        [$reportId, $outbox] = $pending;
+
+        // null = tidak ada menu untuk dilaporkan, tidak ada yang dikirim.
+        if ($outbox) {
+            $this->outbox->publish($outbox);
+        }
 
         // Dimuat ulang setelah publish supaya publishStatus di respons adalah
         // hasil kiriman ini, bukan `pending` dari dalam transaksi.
-        return $this->show($pending->closing_report_id);
+        return $this->show($reportId);
     }
 
 

@@ -131,6 +131,73 @@ class PublishPendingClosingReportsTest extends TestCase
         $this->publisher->assertNothingPublished();
     }
 
+    public function test_rebuild_rebuilds_the_payload_and_resends_a_published_row(): void
+    {
+        // Pesan dari builder lama: terkirim, tapi ditolak BI karena items kosong.
+        $row = $this->outbox([
+            'status'       => ClosingReportOutbox::STATUS_PUBLISHED,
+            'published_at' => now()->subDay(),
+            'payload'      => ['event' => 'closingreport.submitted', 'data' => ['items' => []]],
+        ]);
+        $report = $row->closingReport;
+        $menu = $this->createMenu(null, ['menuname' => 'Salmon Nigiri']);
+        $this->createProductionItem($report->outlet, $menu, [
+            'produced_at' => '2026-10-02 03:00:00', 'final_status' => 'sold', 'sold_at' => '2026-10-02 03:00:00',
+        ]);
+
+        $this->artisan('closing-report:publish-pending', ['--id' => $row->id, '--rebuild' => true])
+            ->expectsOutputToContain('items 0 → 1')
+            ->assertSuccessful();
+
+        $this->publisher->assertPublishedCount(1);
+        $payload = $this->publisher->last()['payload'];
+        $this->assertSame($report->id, $payload['messageId']);
+        $this->assertSame('Salmon Nigiri', $payload['data']['items'][0]['menuName']);
+        $this->assertSame(1, $payload['data']['items'][0]['sold']);
+
+        $row = $row->fresh();
+        $this->assertSame(ClosingReportOutbox::STATUS_PUBLISHED, $row->status);
+        $this->assertCount(1, $row->payload['data']['items']);
+    }
+
+    public function test_rebuild_dry_run_changes_nothing(): void
+    {
+        $row = $this->outbox(['status' => ClosingReportOutbox::STATUS_PUBLISHED, 'published_at' => now()]);
+        $payload = $row->payload;
+
+        $this->artisan('closing-report:publish-pending', ['--id' => $row->id, '--rebuild' => true, '--dry-run' => true])
+            ->expectsOutputToContain('dry run')
+            ->assertSuccessful();
+
+        $this->publisher->assertNothingPublished();
+        $this->assertSame($payload, $row->fresh()->payload);
+        $this->assertSame(ClosingReportOutbox::STATUS_PUBLISHED, $row->fresh()->status);
+    }
+
+    public function test_rebuild_refuses_a_report_without_menus(): void
+    {
+        $row = $this->outbox(['status' => ClosingReportOutbox::STATUS_PUBLISHED, 'published_at' => now()]);
+        $payload = $row->payload;
+
+        $this->artisan('closing-report:publish-pending', ['--id' => $row->id, '--rebuild' => true])
+            ->expectsOutputToContain('tidak punya menu')
+            ->assertFailed();
+
+        $this->publisher->assertNothingPublished();
+        $this->assertSame($payload, $row->fresh()->payload);
+        $this->assertSame(ClosingReportOutbox::STATUS_PUBLISHED, $row->fresh()->status);
+    }
+
+    public function test_rebuild_requires_an_id(): void
+    {
+        $this->outbox();
+
+        $this->artisan('closing-report:publish-pending', ['--rebuild' => true])
+            ->assertFailed();
+
+        $this->publisher->assertNothingPublished();
+    }
+
     public function test_id_option_rejects_a_malformed_id(): void
     {
         $this->artisan('closing-report:publish-pending', ['--id' => 'abc'])
@@ -166,11 +233,13 @@ class PublishPendingClosingReportsTest extends TestCase
     {
         // Antara commit submit dan publish langsung, scheduler tidak boleh
         // menyerobot baris yang sama — itu mengirim pesan dua kali.
+        $outlet = $this->createOutlet();
         $report = ClosingReport::create([
-            'outlet_id' => $this->createOutlet()->id,
+            'outlet_id' => $outlet->id,
             'date'      => '2026-10-02',
             'status'    => 'submitted',
         ]);
+        $this->createProductionItem($outlet, $this->createMenu(), ['produced_at' => '2026-10-02 03:00:00']);
         app(ClosingReportOutboxService::class)->enqueue($report);
 
         $this->artisan('closing-report:publish-pending')->assertSuccessful();

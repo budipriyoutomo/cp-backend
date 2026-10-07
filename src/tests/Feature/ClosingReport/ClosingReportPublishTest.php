@@ -20,8 +20,9 @@ use Tests\TestCase;
 /**
  * Submit closing report → pesan `closingreport.submitted` ke BI.
  *
- * Kontrak payload (v1) disepakati dengan BI: per menu dari sales_item_details,
- * `productionDate` dari production_items.produced_at — bukan tanggal closing.
+ * Kontrak payload (v1) disepakati dengan BI: per menu, gabungan production_items
+ * dan sales_item_details (rincian menang kalau ada), `productionDate` dari
+ * production_items.produced_at — bukan tanggal closing.
  *
  * Broker yang mati tidak boleh menggagalkan submit: pesan menunggu di outbox
  * untuk dikirim ulang. Submit ulang atau request yang diputar ulang tidak boleh
@@ -185,6 +186,95 @@ class ClosingReportPublishTest extends TestCase
         $this->assertSame(['Ebi Nigiri', 'Salmon Nigiri', 'Tuna Nigiri'], array_keys($items));
         $this->assertSame(7, $items['Tuna Nigiri']['sold']);
         $this->assertSame(2, $items['Ebi Nigiri']['waste']);
+    }
+
+    /**
+     * Operator yang tidak membuka dialog rincian di Sales Input tidak
+     * menghasilkan sales_item_details. Dulu itu berarti `items: []`, dan BI
+     * menolak pesannya (STPVJ, 2026-10-06).
+     */
+    public function test_items_come_from_production_when_sales_has_no_menu_details(): void
+    {
+        $outlet = $this->createOutlet();
+        $salmon = $this->createMenu(null, ['code' => 'SU-001', 'menuname' => 'Salmon Nigiri']);
+        $at = '2026-10-02 03:00:00';
+        $this->createProductionItem($outlet, $salmon, ['produced_at' => $at, 'final_status' => 'sold', 'sold_at' => $at]);
+        $this->createProductionItem($outlet, $salmon, ['produced_at' => $at, 'final_status' => 'sold', 'sold_at' => $at]);
+        $this->createProductionItem($outlet, $salmon, ['produced_at' => $at, 'final_status' => 'waste', 'wasted_at' => $at]);
+
+        $header = SalesHeader::create(['outlet_id' => $outlet->id, 'date' => self::DATE, 'status' => 'submitted']);
+        SalesItem::create([
+            'sales_id'         => $header->id,
+            'plate_color_id'   => $salmon->plate_color_id,
+            'pos_sold'         => 2,
+            'production_sold'  => 2,
+            'production_waste' => 1,
+            'adjustment'       => 0,
+            'compensation'     => 0,
+            'selisih'          => 0,
+        ]);
+
+        $this->submit($outlet)->assertOk();
+
+        $this->assertSame([[
+            'menuId'         => $salmon->id,
+            'menuCode'       => 'SU-001',
+            'menuName'       => 'Salmon Nigiri',
+            'productionDate' => self::DATE,
+            'sold'           => 2,
+            'waste'          => 1,
+            'adjustment'     => 0,
+            'compensation'   => 0,
+        ]], $this->publisher->last()['payload']['data']['items']);
+    }
+
+    /**
+     * Outlet yang tidak berproduksi tidak mengirim apa pun ke BI — `items: []`
+     * ditolak penerima. Sales Input tetap bisa berisi baris POS per warna
+     * piring tanpa produksi, jadi kasus ini mungkin terjadi.
+     */
+    public function test_a_report_without_any_menu_sends_nothing(): void
+    {
+        $outlet = $this->createOutlet();
+        $header = SalesHeader::create(['outlet_id' => $outlet->id, 'date' => self::DATE, 'status' => 'submitted']);
+        SalesItem::create([
+            'sales_id'         => $header->id,
+            'plate_color_id'   => $this->createPlateColor()->id,
+            'pos_sold'         => 3,
+            'production_sold'  => 0,
+            'production_waste' => 0,
+            'adjustment'       => 0,
+            'compensation'     => 0,
+            'selisih'          => 3,
+        ]);
+
+        $this->submit($outlet)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'submitted')
+            ->assertJsonPath('data.publishStatus', null);
+
+        $this->publisher->assertNothingPublished();
+        $this->assertSame(0, ClosingReportOutbox::count());
+    }
+
+    public function test_menus_with_and_without_details_are_both_sent(): void
+    {
+        $outlet = $this->createOutlet();
+        $color = $this->createPlateColor();
+        $detailed = $this->createMenu($color, ['menuname' => 'Salmon Nigiri']);
+        $productionOnly = $this->createMenu($color, ['menuname' => 'Tuna Nigiri']);
+        $at = '2026-10-02 04:00:00';
+        $this->createProductionItem($outlet, $detailed, ['produced_at' => $at, 'final_status' => 'sold', 'sold_at' => $at]);
+        $this->createProductionItem($outlet, $productionOnly, ['produced_at' => $at, 'final_status' => 'waste', 'wasted_at' => $at]);
+        $this->seedSubmittedSales($outlet, [['menu' => $detailed, 'sold' => 1, 'waste' => 0, 'adjustment' => 2]]);
+
+        $this->submit($outlet)->assertOk();
+
+        $items = $this->itemsByName($this->publisher->last()['payload']);
+        $this->assertSame(['Salmon Nigiri', 'Tuna Nigiri'], array_keys($items));
+        $this->assertSame(2, $items['Salmon Nigiri']['adjustment']);
+        $this->assertSame(1, $items['Tuna Nigiri']['waste']);
+        $this->assertSame(0, $items['Tuna Nigiri']['adjustment']);
     }
 
     public function test_menu_without_a_code_is_sent_with_a_null_code_and_its_id(): void

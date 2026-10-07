@@ -3,9 +3,11 @@
 namespace App\Services\ClosingReport;
 
 use App\Models\ClosingReport;
+use App\Models\Menu;
 use App\Models\ProductionItem;
 use App\Models\SalesItemDetail;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Payload `closingreport.submitted` v1 untuk BI. Bentuknya kontrak dengan
@@ -41,56 +43,77 @@ class ClosingReportPayloadBuilder
         ];
     }
 
+    /**
+     * Satu baris per menu: gabungan menu yang diproduksi hari itu dan menu yang
+     * punya rincian di Sales Input — sama dengan baris di layar Closing Report
+     * (SalesClosingReportResource).
+     *
+     * Rincian per menu (`sales_item_details`) hanya ada kalau operator membuka
+     * dialog rincian di Sales Input. Dulu payload dibangun dari tabel itu saja,
+     * jadi sales yang disubmit tanpa membuka dialog terkirim dengan `items: []`
+     * dan ditolak BI. Sekarang:
+     * - `sold`/`waste` dari rincian kalau ada (dibekukan saat Sales Input),
+     *   kalau tidak dari production_items. Rincian itu sendiri dihitung dari
+     *   query production_items yang sama, jadi keduanya sepakat.
+     * - `adjustment`/`compensation` hanya ada di rincian; tanpa rincian = 0.
+     */
     private function items(ClosingReport $report): array
     {
         $details = SalesItemDetail::query()
             ->whereHas('item', fn ($q) => $q->where('sales_id', $report->sales_id))
-            ->with(['menu' => fn ($q) => $q->withTrashed()])
-            ->orderBy('menu_name')
-            ->get();
+            ->get()
+            ->groupBy('menu_id');
 
-        $productionDates = $this->productionDates($report, $details->pluck('menu_id')->unique()->all());
+        $production = $this->productionByMenu($report);
 
-        return $details
-            ->map(fn (SalesItemDetail $detail) => [
-                'menuId'         => $detail->menu_id,
-                'menuCode'       => $detail->menu?->code,
-                'menuName'       => $detail->menu_name,
-                'productionDate' => $productionDates[$detail->menu_id] ?? null,
-                'sold'           => (int) $detail->total_sold,
-                'waste'          => (int) $detail->total_wasted,
-                'adjustment'     => (int) $detail->adjustment,
-                'compensation'   => (int) $detail->compensation,
-            ])
+        $menuIds = $production->keys()->merge($details->keys())->filter()->unique()->values();
+
+        $menus = Menu::withTrashed()->whereIn('id', $menuIds)->get()->keyBy('id');
+
+        return $menuIds
+            ->map(function (string $menuId) use ($details, $production, $menus) {
+                $rows = $details->get($menuId);
+                $made = $production->get($menuId);
+                $menu = $menus->get($menuId);
+
+                return [
+                    'menuId'         => $menuId,
+                    'menuCode'       => $menu?->code,
+                    'menuName'       => $rows?->first()->menu_name ?? $menu?->menuname,
+                    'productionDate' => $made ? Carbon::parse($made->first_produced_at)->toDateString() : null,
+                    'sold'           => (int) ($rows ? $rows->sum('total_sold') : ($made->sold ?? 0)),
+                    'waste'          => (int) ($rows ? $rows->sum('total_wasted') : ($made->waste ?? 0)),
+                    'adjustment'     => (int) ($rows?->sum('adjustment') ?? 0),
+                    'compensation'   => (int) ($rows?->sum('compensation') ?? 0),
+                ];
+            })
+            ->sortBy('menuName', SORT_NATURAL | SORT_FLAG_CASE)
             ->values()
             ->all();
     }
 
     /**
-     * Tanggal produksi per menu, dibaca dari production_items — bukan disalin
-     * dari tanggal closing.
+     * Angka produksi per menu di outlet + hari laporan.
      *
-     * Filternya sama dengan yang dipakai saat angka per menu dikumpulkan
-     * (ProductionItemService::getProductionMenuDetail: `whereDate(produced_at)`
-     * di zona waktu aplikasi), jadi tanggal ini selalu menunjuk baris produksi
-     * yang benar-benar diwakili angka sold/waste-nya.
-     *
-     * @return array<string, string> menu_id => Y-m-d
+     * Filternya sama dengan ProductionItemService::getProductionMenuDetail
+     * (`whereDate(produced_at)` di zona waktu aplikasi), sumber angka rincian
+     * Sales Input. `productionDate` dibaca dari sini — bukan disalin dari
+     * tanggal closing.
      */
-    private function productionDates(ClosingReport $report, array $menuIds): array
+    private function productionByMenu(ClosingReport $report): Collection
     {
-        if ($menuIds === []) {
-            return [];
-        }
-
         return ProductionItem::query()
             ->where('outlet_id', $report->outlet_id)
-            ->whereIn('menu_id', $menuIds)
+            ->whereNotNull('menu_id')
             ->whereDate('produced_at', $report->date->toDateString())
             ->groupBy('menu_id')
-            ->selectRaw('menu_id, MIN(produced_at) as first_produced_at')
-            ->pluck('first_produced_at', 'menu_id')
-            ->map(fn ($producedAt) => Carbon::parse($producedAt)->toDateString())
-            ->all();
+            ->selectRaw('
+                menu_id,
+                MIN(produced_at) as first_produced_at,
+                SUM(CASE WHEN sold_at IS NOT NULL THEN quantity ELSE 0 END) as sold,
+                SUM(CASE WHEN wasted_at IS NOT NULL THEN quantity ELSE 0 END) as waste
+            ')
+            ->get()
+            ->keyBy('menu_id');
     }
 }

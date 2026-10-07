@@ -35,12 +35,27 @@ class ClosingReportOutboxService
     ) {
     }
 
-    public function enqueue(ClosingReport $report): ClosingReportOutbox
+    /**
+     * @return ClosingReportOutbox|null null kalau laporan tidak punya satu menu
+     *         pun — outlet yang tidak berproduksi tidak mengirim apa pun ke BI
+     *         (keputusan bisnis; `items: []` ditolak penerima).
+     */
+    public function enqueue(ClosingReport $report): ?ClosingReportOutbox
     {
+        $payload = $this->payloads->build($report);
+
+        if ($payload['data']['items'] === []) {
+            Log::info('Closing report tanpa menu, tidak dikirim ke BI', [
+                'closing_report_id' => $report->id,
+            ]);
+
+            return null;
+        }
+
         return ClosingReportOutbox::firstOrCreate(
             ['closing_report_id' => $report->id],
             [
-                'payload'         => $this->payloads->build($report),
+                'payload'         => $payload,
                 'next_attempt_at' => now()->addMinutes(self::IMMEDIATE_PUBLISH_GRACE_MINUTES),
             ],
         );
@@ -100,6 +115,40 @@ class ClosingReportOutboxService
         $this->publish($outbox);
 
         return $outbox->fresh(['closingReport.outlet']);
+    }
+
+    /**
+     * Susun ulang payload dari data laporan saat ini, lalu kembalikan baris ke
+     * antrean — termasuk baris yang sudah terkirim.
+     *
+     * Hanya untuk pesan yang ditolak BI karena isinya salah (mis. `items: []`
+     * dari builder lama). Bukan tombol di layar admin: mengirim ulang data yang
+     * sudah sampai adalah permintaan BI, jadi jalurnya hanya lewat CLI
+     * (`publish-pending --id=… --rebuild`). `messageId` tetap sama.
+     */
+    public function rebuild(ClosingReportOutbox $outbox): ClosingReportOutbox
+    {
+        $report = $outbox->closingReport;
+
+        if (! $report) {
+            throw new BusinessRuleException('Closing report untuk pesan ini tidak ditemukan.', 404);
+        }
+
+        $payload = $this->payloads->build($report);
+
+        if ($payload['data']['items'] === []) {
+            throw new BusinessRuleException('Laporan ini tidak punya menu untuk dikirim ke BI.', 422);
+        }
+
+        $outbox->update([
+            'payload'         => $payload,
+            'status'          => ClosingReportOutbox::STATUS_PENDING,
+            'published_at'    => null,
+            'last_error'      => null,
+            'next_attempt_at' => null,
+        ]);
+
+        return $outbox;
     }
 
     /**

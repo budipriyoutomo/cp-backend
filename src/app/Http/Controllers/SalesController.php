@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Sales\CancelSalesDraftRequest;
 use App\Http\Requests\Sales\StoreSalesRequest;  
 use App\Http\Resources\Sales\SalesResource;
 use App\Http\Resources\Sales\SalesDraftResource;
@@ -124,5 +125,25 @@ class SalesController extends BaseApiController
         );
 
         return $this->resource(new SalesResource($data));
+    }
+
+    // ==========================
+    // CANCEL DRAFT (admin)
+    // ==========================
+    /**
+     * Membatalkan draft Sales Input supaya tanggalnya bisa dikoreksi lewat
+     * Koreksi Status Produksi. Aturannya di SalesService::cancelDraft().
+     */
+    public function destroy(string $id, CancelSalesDraftRequest $request)
+    {
+        $header = $this->service->cancelDraft($id, $request->validated()['reason']);
+
+        return $this->success([
+            'id'             => $header->id,
+            'outletId'       => trim((string) $header->outlet_id),
+            'date'           => $header->date?->format('Y-m-d'),
+            'deletionReason' => $header->deletion_reason,
+            'deletedAt'      => $header->deleted_at?->toIso8601String(),
+        ], 'Draft Sales Input dibatalkan');
     }
 }

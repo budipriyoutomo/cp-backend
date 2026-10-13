@@ -468,6 +468,32 @@ class ProductionItemService extends BaseService
             ->pluck('total', 'plate_color');
     }
  
+    /**
+     * Sold/waste per (menu, warna) pada hari produksi itu, dengan filter yang
+     * sama dengan getProductionMenuDetail() — sumber `sales_item_details` —
+     * tapi untuk semua warna sekaligus.
+     *
+     * @return \Illuminate\Support\Collection<string, array{sold:int, waste:int}> "menu_id|plate_color" => total
+     */
+    public function totalsByMenu(string $outletId, string $date)
+    {
+        return ProductionItem::query()
+            ->where('outlet_id', $outletId)
+            ->whereDate('produced_at', \Carbon\Carbon::parse($date)->toDateString())
+            ->whereNotNull('menu_id')
+            ->groupBy('menu_id', 'plate_color')
+            ->selectRaw('
+                menu_id,
+                plate_color,
+                SUM(CASE WHEN sold_at IS NOT NULL THEN quantity ELSE 0 END) as sold,
+                SUM(CASE WHEN wasted_at IS NOT NULL THEN quantity ELSE 0 END) as waste
+            ')
+            ->get()
+            ->mapWithKeys(fn ($row) => [
+                $row->menu_id . '|' . $row->plate_color => ['sold' => (int) $row->sold, 'waste' => (int) $row->waste],
+            ]);
+    }
+
     public function getProductionMenuDetail(
         string $outletId,
         string $date,

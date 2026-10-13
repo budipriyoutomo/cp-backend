@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MasterController;
 use App\Http\Controllers\ProductionController;
+use App\Http\Controllers\ProductionCorrectionController;
 use App\Http\Controllers\ProductionImportController;
 use App\Http\Controllers\POSController;
 use App\Http\Controllers\SalesController;
@@ -176,6 +177,15 @@ Route::prefix('production')
         Route::get('/import-backdate/template', [ProductionImportController::class, 'template']);
         Route::post('/import-backdate/preview', [ProductionImportController::class, 'preview']);
         Route::post('/import-backdate', [ProductionImportController::class, 'store']);
+
+        // Koreksi Status Produksi (sold ⇄ waste) — lihat
+        // ProductionStatusCorrectionService.
+        Route::get('/corrections/summary', [ProductionCorrectionController::class, 'summary'])
+            ->name('production.corrections.summary');
+        Route::post('/corrections/preview', [ProductionCorrectionController::class, 'preview']);
+        Route::get('/corrections', [ProductionCorrectionController::class, 'index']);
+        Route::post('/corrections', [ProductionCorrectionController::class, 'store']);
+        Route::get('/corrections/{id}', [ProductionCorrectionController::class, 'show'])->whereUuid('id');
     });
 
 // ======================================================
@@ -192,6 +202,15 @@ Route::prefix('reports')
     Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
     Route::get('/daily-summary', [ReportsController::class, 'dailySummary']);
     Route::get('/waste-analysis', [ReportsController::class, 'wasteAnalysis']);
+});
+
+// Membatalkan draft Sales Input — jalan keluar Koreksi Status Produksi, yang
+// terkunci begitu Sales Input tanggal itu ada. Admin saja, modul admin: layar
+// pemanggilnya adalah layar koreksi, bukan layar operation.
+Route::prefix('sales')
+    ->middleware(['auth:api', 'outlet.access', 'role:admin', 'module:admin'])
+    ->group(function () {
+    Route::delete('/{id}', [SalesController::class, 'destroy'])->whereUuid('id');
 });
 
 Route::prefix('sales')

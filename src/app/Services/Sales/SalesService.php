@@ -4,13 +4,16 @@ namespace App\Services\Sales;
 
 use App\Exceptions\BusinessRuleException;
 use App\Models\ClosingReport;
+use App\Models\ProductionStatusCorrection;
 use App\Models\SalesHeader;
 use App\Models\SalesItem;
 use App\Models\SalesItemDetail;
 use App\Http\Resources\Sales\SalesClosingReportResource;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 use App\Services\BaseAggregateService;
+use App\Services\Production\ProductionItemService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -21,6 +24,11 @@ class SalesService extends BaseAggregateService
 
     protected string $itemModel = SalesItem::class;
     protected string $itemForeignKey = 'sales_id';
+
+    public function __construct(
+        private readonly ProductionItemService $productionItems,
+    ) {
+    }
 
     // ==========================
     // UPSERT PER (OUTLET, DATE)
@@ -37,6 +45,10 @@ class SalesService extends BaseAggregateService
 
         $this->assertClosingReportNotSubmitted($data['outlet_id'], $date);
 
+        if ($this->wasCorrected($data['outlet_id'], $date)) {
+            $this->assertSnapshotMatchesProduction($data['outlet_id'], $date, $data['items'] ?? []);
+        }
+
         $existing = SalesHeader::query()
             ->where('outlet_id', $data['outlet_id'])
             ->whereDate('date', $date)
@@ -47,6 +59,53 @@ class SalesService extends BaseAggregateService
         }
 
         return parent::create($data);
+    }
+
+    /**
+     * Koreksi Status Produksi hanya boleh sebelum Sales Input tanggal itu ada.
+     * Tapi layar Sales Input bisa sudah menarik angka (Get Data POS) sebelum
+     * koreksi, lalu menyimpan sesudahnya — snapshot lama masuk diam-diam.
+     */
+    private function wasCorrected(string $outletId, string $date): bool
+    {
+        return ProductionStatusCorrection::query()
+            ->where('outlet_id', $outletId)
+            ->whereDate('production_date', $date)
+            ->exists();
+    }
+
+    /**
+     * Untuk tanggal yang pernah dikoreksi, angka produksi yang disimpan harus
+     * angka terbaru. Dasar perbandingannya sama dengan sumber angka di layar:
+     * per warna dari `totalsByPlateColor()` (Get Data POS), per menu dari
+     * rincian produksi.
+     */
+    private function assertSnapshotMatchesProduction(string $outletId, string $date, array $items): void
+    {
+        $sold  = $this->productionItems->totalsByPlateColor($outletId, $date, 'sold_at');
+        $waste = $this->productionItems->totalsByPlateColor($outletId, $date, 'wasted_at');
+        $menus = $this->productionItems->totalsByMenu($outletId, $date);
+
+        foreach ($items as $item) {
+            $color = $item['plate_color_id'] ?? null;
+
+            $colorMatches = (int) ($item['production_sold'] ?? 0) === (int) ($sold[$color] ?? 0)
+                && (int) ($item['production_waste'] ?? 0) === (int) ($waste[$color] ?? 0);
+
+            $detailsMatch = collect($item['details'] ?? [])->every(function ($detail) use ($menus, $color) {
+                $current = $menus[($detail['menu_id'] ?? '') . '|' . $color] ?? ['sold' => 0, 'waste' => 0];
+
+                return (int) ($detail['total_sold'] ?? 0) === $current['sold']
+                    && (int) ($detail['total_wasted'] ?? 0) === $current['waste'];
+            });
+
+            if (! $colorMatches || ! $detailsMatch) {
+                throw new BusinessRuleException(
+                    'Data produksi tanggal ini sudah dikoreksi admin, jadi angka di layar sudah tidak berlaku. '
+                    . 'Klik Get Data POS ulang lalu simpan lagi.'
+                );
+            }
+        }
     }
 
     /**
@@ -69,6 +128,65 @@ class SalesService extends BaseAggregateService
                 . 'Hubungi admin kalau memang perlu koreksi.'
             );
         }
+    }
+
+    /**
+     * Membatalkan draft Sales Input (soft delete), oleh admin.
+     *
+     * Ada karena Koreksi Status Produksi terkunci begitu Sales Input tanggal
+     * itu ada, draft sekalipun. Yang hilang hanya pekerjaan yang memang harus
+     * diulang: setelah koreksi operator wajib Get Data POS ulang, dan Get Data
+     * POS selalu mengosongkan adjustment/compensation.
+     *
+     * Hanya draft. Sales `submitted` adalah dasar closing report yang
+     * ditandatangani dan dikirim ke BI — membatalkannya butuh alur lain.
+     *
+     * Closing draft yang terlanjur menunjuk header ini tidak dihapus —
+     * `closing_reports` unique (outlet_id, date) tanpa pengecualian soft
+     * delete, jadi baris yang dihapus akan menghalangi closing berikutnya.
+     * Tautannya dilepas dan entries-nya dibuang supaya dibangkitkan ulang dari
+     * Sales Input yang baru (`findOrCreateReport()` menautkan ulang).
+     */
+    public function cancelDraft(string $id, string $reason): SalesHeader
+    {
+        return DB::transaction(function () use ($id, $reason) {
+            $header = SalesHeader::query()->lockForUpdate()->findOrFail($id);
+
+            if ($header->status !== 'draft') {
+                throw new BusinessRuleException(
+                    'Hanya Sales Input berstatus draft yang bisa dibatalkan. '
+                    . 'Sales Input ini sudah disubmit.',
+                    409
+                );
+            }
+
+            $closing = ClosingReport::query()->where('sales_id', $header->id)->first();
+
+            if ($closing) {
+                $closing->entries()->withTrashed()->forceDelete();
+                $closing->update(['sales_id' => null]);
+            }
+
+            $header->update(['deletion_reason' => $reason]);
+            $header->delete();
+
+            return $header;
+        });
+    }
+
+    /**
+     * Draft yang dibatalkan untuk outlet + tanggal itu, terbaru dulu.
+     *
+     * @return \Illuminate\Support\Collection<int, SalesHeader>
+     */
+    public function cancelledDrafts(string $outletId, string $date)
+    {
+        return SalesHeader::onlyTrashed()
+            ->where('outlet_id', $outletId)
+            ->whereDate('date', $date)
+            ->whereNotNull('deletion_reason')
+            ->orderByDesc('deleted_at')
+            ->get();
     }
 
     // ==========================

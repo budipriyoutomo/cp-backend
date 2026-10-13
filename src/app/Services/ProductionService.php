@@ -6,6 +6,7 @@ use App\Services\Production\ProductionBackdateImportService;
 use App\Services\Production\ProductionBackdateTemplateService;
 use App\Services\Production\ProductionDashboardService;
 use App\Services\Production\ProductionPlanService;
+use App\Services\Production\ProductionStatusCorrectionService;
 use App\Services\Production\WasteRecordService;
 use App\Services\Production\ProductionItemService;
 use App\Services\Production\WasteService;
@@ -27,5 +28,6 @@ class ProductionService
         public WasteService $wasteReport,
         public ProductionBackdateImportService $backdateImport,
         public ProductionBackdateTemplateService $backdateTemplate,
+        public ProductionStatusCorrectionService $correction,
     ) {}
 }

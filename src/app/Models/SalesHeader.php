@@ -16,6 +16,8 @@ class SalesHeader extends BaseModel
         'outlet_id',
         'date',
         'status',
+        // Diisi saat admin membatalkan draft — lihat SalesService::cancelDraft().
+        'deletion_reason',
         'created_by',
         'updated_by',
         'deleted_by'

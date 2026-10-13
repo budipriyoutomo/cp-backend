@@ -75,6 +75,7 @@ class RouteProtectionTest extends TestCase
             'POST /sales'                    => ['post', '/api/sales'],
             'GET /sales/by-date'             => ['get', '/api/sales/by-date'],
             'GET /sales/{id}'                => ['get', '/api/sales/' . self::SOME_UUID],
+            'DELETE /sales/{id}'             => ['delete', '/api/sales/' . self::SOME_UUID],
 
             // closing reports
             'GET /closing-reports'           => ['get', '/api/closing-reports'],
@@ -89,6 +90,13 @@ class RouteProtectionTest extends TestCase
             // production — import backdate (prefix production, modul admin)
             'POST /production/import-backdate' => ['post', '/api/production/import-backdate'],
             'POST /production/import-preview'  => ['post', '/api/production/import-backdate/preview'],
+
+            // production — koreksi status (prefix production, modul admin)
+            'GET /production/corrections/summary' => ['get', '/api/production/corrections/summary'],
+            'POST /production/corrections/preview' => ['post', '/api/production/corrections/preview'],
+            'GET /production/corrections'      => ['get', '/api/production/corrections'],
+            'POST /production/corrections'     => ['post', '/api/production/corrections'],
+            'GET /production/corrections/{id}' => ['get', '/api/production/corrections/' . self::SOME_UUID],
 
             // waste
             'GET /waste'                     => ['get', '/api/waste'],

@@ -48,9 +48,6 @@ class ProductionStatusCorrectionService extends BaseService
 {
     protected string $model = ProductionStatusCorrection::class;
 
-    /** Batas hari ke belakang. Hari ini juga boleh. */
-    public const MAX_DAYS_BACK = 31;
-
     public const STATUSES = ['sold', 'waste'];
 
     public function __construct(
@@ -252,14 +249,10 @@ class ProductionStatusCorrectionService extends BaseService
 
     private function assertDayInRange(Carbon $day): void
     {
+        // Sengaja tanpa batas hari ke belakang: yang menentukan boleh-tidaknya
+        // koreksi adalah Sales Input (lockState()), bukan umur tanggalnya.
         if ($day->gt(today())) {
             throw new BusinessRuleException('Tanggal koreksi tidak boleh di masa depan.');
-        }
-
-        if ($day->lt(today()->subDays(self::MAX_DAYS_BACK))) {
-            throw new BusinessRuleException(
-                'Koreksi hanya bisa untuk ' . self::MAX_DAYS_BACK . ' hari terakhir.'
-            );
         }
     }
 
@@ -282,8 +275,6 @@ class ProductionStatusCorrectionService extends BaseService
 
         if ($day->gt(today())) {
             $reason = 'Tanggal koreksi tidak boleh di masa depan.';
-        } elseif ($day->lt(today()->subDays(self::MAX_DAYS_BACK))) {
-            $reason = 'Koreksi hanya bisa untuk ' . self::MAX_DAYS_BACK . ' hari terakhir.';
         } elseif ($sales) {
             $reason = "Sales Input tanggal ini sudah dibuat (status {$sales->status}). "
                 . 'Koreksi hanya bisa dilakukan sebelum Sales Input disimpan'

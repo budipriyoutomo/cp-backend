@@ -280,17 +280,29 @@ class ProductionStatusCorrectionTest extends TestCase
             ->assertJsonValidationErrors('reason');
     }
 
-    public function test_dates_outside_the_window_are_rejected(): void
+    public function test_a_future_date_is_rejected(): void
     {
         $this->postJson(self::URL, $this->payload(
             [$this->line('sold', 'waste', 1)],
             ['date' => today()->addDay()->toDateString()]
         ))->assertStatus(422);
+    }
 
-        $this->postJson(self::URL, $this->payload(
-            [$this->line('sold', 'waste', 1)],
-            ['date' => today()->subDays(32)->toDateString()]
-        ))->assertStatus(422);
+    /**
+     * Tidak ada batas umur: selama Sales Input tanggal itu belum dibuat,
+     * tanggal setua apa pun masih bisa dikoreksi.
+     */
+    public function test_an_old_date_without_sales_input_can_still_be_corrected(): void
+    {
+        $this->day = today()->subDays(400);
+        $this->seedClosed(2, 'sold');
+
+        $this->getJson(self::SUMMARY_URL . "?outletId={$this->outlet->id}&date={$this->day->toDateString()}")
+            ->assertJsonPath('data.lock.locked', false);
+
+        $this->postJson(self::URL, $this->payload([$this->line('sold', 'waste', 1)]))->assertOk();
+
+        $this->assertSame(1, $this->countStatus('waste'));
     }
 
     public function test_only_admins_can_correct(): void

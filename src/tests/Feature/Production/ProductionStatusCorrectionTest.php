@@ -8,6 +8,7 @@ use App\Models\ProductionItem;
 use App\Models\ProductionStatusCorrection;
 use App\Models\SalesHeader;
 use App\Models\SalesItem;
+use App\Models\WasteCategory;
 use App\Models\WasteReason;
 use App\Models\WasteRecord;
 use App\Services\Production\ProductionItemService;
@@ -193,6 +194,23 @@ class ProductionStatusCorrectionTest extends TestCase
         $this->assertCount(2, $records);
         $this->assertSame('Rusak', $records->first()->reason);
         $this->assertSame($this->day->toDateString(), $records->first()->recorded_at->toDateString());
+    }
+
+    /**
+     * Waste hasil koreksi membawa snapshot kategori reason yang dipilih admin,
+     * sama seperti waste dari dapur.
+     */
+    public function test_sold_to_waste_snapshots_the_chosen_reason_and_its_category(): void
+    {
+        $category = WasteCategory::where('code', WasteCategory::DEFAULT_CODE)->firstOrFail();
+        $this->wasteReason->update(['waste_category_id' => $category->id]);
+        $this->seedClosed(2, 'sold');
+
+        $this->postJson(self::URL, $this->payload([$this->line('sold', 'waste', 1)]))->assertOk();
+
+        $record = WasteRecord::firstOrFail();
+        $this->assertSame($this->wasteReason->id, $record->waste_reason_id);
+        $this->assertSame($category->id, $record->waste_category_id);
     }
 
     public function test_waste_to_sold_soft_deletes_the_waste_records(): void

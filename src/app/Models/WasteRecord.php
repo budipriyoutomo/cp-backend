@@ -13,6 +13,8 @@ class WasteRecord extends BaseModel
         'plate_color',
         'quantity',
         'reason',
+        'waste_reason_id',
+        'waste_category_id',
         'recorded_at',
         'created_by',
         'updated_by',
@@ -46,6 +48,17 @@ class WasteRecord extends BaseModel
     public function plateColor()
     {
         return $this->belongsTo(PlateColors::class, 'plate_color');
+    }
+
+    /** Snapshot saat dicatat — bukan mapping reason terkini. */
+    public function wasteReason()
+    {
+        return $this->belongsTo(WasteReason::class, 'waste_reason_id')->withTrashed();
+    }
+
+    public function wasteCategory()
+    {
+        return $this->belongsTo(WasteCategory::class, 'waste_category_id')->withTrashed();
     }
 
 }

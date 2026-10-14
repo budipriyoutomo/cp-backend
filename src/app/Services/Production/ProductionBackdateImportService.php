@@ -5,6 +5,7 @@ namespace App\Services\Production;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Menu;
 use App\Models\ProductionItem;
+use App\Models\WasteReason;
 use App\Models\WasteRecord;
 use App\Services\BaseService;
 use App\Services\Concerns\ResolvesOutletBrand;
@@ -147,7 +148,11 @@ class ProductionBackdateImportService extends BaseService
             );
         }
 
-        return DB::transaction(function () use ($rows, $outletId, $summary) {
+        // Teks reason tetap `notes` baris impor; kategorinya selalu dari reason
+        // sistem "Import backdate", apa pun isi catatannya.
+        $snapshot = app(WasteReasonResolver::class)->forSystem(WasteReason::IMPORT_BACKDATE);
+
+        return DB::transaction(function () use ($rows, $outletId, $summary, $snapshot) {
             $imported = 0;
             $wasted   = 0;
 
@@ -191,6 +196,7 @@ class ProductionBackdateImportService extends BaseService
                         'plate_color'        => $menu->plate_color_id,
                         'quantity'           => 1,
                         'reason'             => $row['notes'] ?: 'Import produksi backdate',
+                        ...$snapshot,
                         'recorded_at'        => $producedAt,
                         'outlet_id'          => $outletId,
                     ]);

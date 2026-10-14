@@ -10,6 +10,8 @@ use App\Http\Requests\Master\OutletRequest;
 use App\Http\Resources\Master\OutletResource;
 use App\Http\Requests\Master\WasteReasonRequest;
 use App\Http\Resources\Master\WasteReasonResource;
+use App\Http\Requests\Master\WasteCategoryRequest;
+use App\Http\Resources\Master\WasteCategoryResource;
 use App\Http\Requests\Master\BrandRequest;
 use App\Http\Resources\Master\BrandResource;
 use App\Http\Requests\Master\TimeMarkerRequest;
@@ -246,6 +248,55 @@ class MasterController extends BaseApiController
     {
         $this->service->wasteReason->delete($id);
         return $this->success(null, 'Waste reason deleted');
+    }
+
+    // ======================================================
+    // WASTE CATEGORY METHODS
+    // ======================================================
+
+    public function wastecategoryindex(Request $request)
+    {
+        return $this->resource(
+            WasteCategoryResource::collection($this->service->wasteCategory->list($request))
+        );
+    }
+
+    public function wastecategoryshow($id)
+    {
+        $category = $this->service->wasteCategory->find($id);
+
+        if (!$category) {
+            return $this->error('Waste category not found', 404);
+        }
+
+        return $this->resource(new WasteCategoryResource($category->loadCount('reasons')));
+    }
+
+    public function wastecategorystore(WasteCategoryRequest $request)
+    {
+        return $this->resource(
+            new WasteCategoryResource(
+                $this->service->wasteCategory->create($request->validated())
+            ),
+            'Waste category created',
+            201
+        );
+    }
+
+    public function wastecategoryupdate(WasteCategoryRequest $request, $id)
+    {
+        return $this->resource(
+            new WasteCategoryResource(
+                $this->service->wasteCategory->update($id, $request->validated())
+            ),
+            'Waste category updated'
+        );
+    }
+
+    public function wastecategorydestroy($id)
+    {
+        $this->service->wasteCategory->delete($id);
+        return $this->success(null, 'Waste category deleted');
     }
 
     // ======================================================

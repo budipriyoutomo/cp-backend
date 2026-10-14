@@ -101,6 +101,7 @@ class MalformedUuidInputTest extends TestCase
             'master outlet'       => ['/api/master/outlet/abc'],
             'master brand'        => ['/api/master/brand/abc'],
             'master waste reason' => ['/api/master/waste-reason/abc'],
+            'master waste category' => ['/api/master/waste-category/abc'],
             // users.id auto-increment, jadi batasannya angka — bukan uuid.
             'user bukan angka'    => ['/api/users/abc'],
         ];

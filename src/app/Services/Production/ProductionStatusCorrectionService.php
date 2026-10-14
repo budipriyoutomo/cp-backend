@@ -514,6 +514,7 @@ class ProductionStatusCorrectionService extends BaseService
             'plate_color'        => $item->plate_color,
             'quantity'           => $item->quantity ?? 1,
             'reason'             => $wasteReason?->reason_name ?? 'Koreksi status produksi',
+            ...app(WasteReasonResolver::class)->forReason($wasteReason),
             'recorded_at'        => $stamp,
             'outlet_id'          => $item->outlet_id,
         ])->id;

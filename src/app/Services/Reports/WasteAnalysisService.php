@@ -4,6 +4,7 @@ namespace App\Services\Reports;
 
 use App\Models\PlateColors;
 use App\Models\ProductionItem;
+use App\Models\WasteCategory;
 use App\Models\WasteRecord;
 use App\Support\Uuid;
 use Carbon\Carbon;
@@ -92,6 +93,40 @@ class WasteAnalysisService
             ->sortByDesc('count')
             ->values();
 
+        // ── Waste grouped by category — dari snapshot di waste_records, bukan
+        // mapping reason saat ini, supaya laporan lama tidak bergeser ketika
+        // admin memindahkan reason. Nama kategori diresolusi di PHP (pola yang
+        // sama dengan plate color di atas). Baris tanpa snapshot = belum
+        // dikategorikan.
+        $wasteByCategory = WasteRecord::query()
+            ->where('outlet_id', $outletId)
+            ->whereBetween('recorded_at', [$start, $end])
+            ->groupBy('waste_category_id')
+            ->get([
+                'waste_category_id',
+                DB::raw('SUM(quantity) as count'),
+            ]);
+
+        $categories = WasteCategory::withTrashed()
+            ->whereIn('id', $wasteByCategory->pluck('waste_category_id')->filter()->all())
+            ->get()
+            ->keyBy('id');
+
+        $byCategory = $wasteByCategory
+            ->map(function ($row) use ($categories, $totalWaste) {
+                $category = $row->waste_category_id ? $categories->get($row->waste_category_id) : null;
+
+                return [
+                    'categoryId'   => $category?->id,
+                    'categoryCode' => $category?->code ?? WasteCategory::UNCATEGORIZED_CODE,
+                    'categoryName' => $category?->category_name ?? WasteCategory::UNCATEGORIZED_NAME,
+                    'count'        => (int) $row->count,
+                    'percentage'   => $totalWaste > 0 ? round(((int) $row->count / $totalWaste) * 100, 2) : 0,
+                ];
+            })
+            ->sortByDesc('count')
+            ->values();
+
         // ── Waste trend per day
         $byDay = WasteRecord::query()
             ->where('outlet_id', $outletId)
@@ -120,6 +155,7 @@ class WasteAnalysisService
             'topReason'       => $byReason->first()['reason'] ?? null,
             'byPlateColor'    => $byPlateColor,
             'byReason'        => $byReason,
+            'byCategory'      => $byCategory,
             'byDay'           => $byDay,
         ];
     }

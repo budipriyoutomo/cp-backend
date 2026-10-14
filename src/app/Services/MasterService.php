@@ -8,6 +8,7 @@ use App\Services\Master\MenuService;
 use App\Services\Master\OutletService;
 use App\Services\Master\TimeMarkerService;
 use App\Services\Master\TimeSlotService;
+use App\Services\Master\WasteCategoryService;
 use App\Services\Master\WasteReasonService;
 
 class MasterService
@@ -17,6 +18,7 @@ class MasterService
         public MenuService $menu,
         public OutletService $outlet,
         public WasteReasonService $wasteReason,
+        public WasteCategoryService $wasteCategory,
         public BrandService $brand,
         public TimeMarkerService $timeMarker,
         public TimeSlotService $timeSlot

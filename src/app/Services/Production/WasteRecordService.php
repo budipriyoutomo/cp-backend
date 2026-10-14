@@ -39,7 +39,11 @@ class WasteRecordService extends BaseService
     }*/ 
     public function recordFromItems(array $itemIds, string $reason)
     {
-        return DB::transaction(function () use ($itemIds, $reason) {
+        // Snapshot reason + kategori dari teks yang dikirim layar dapur. Teks
+        // yang tidak dikenal tetap dicatat, hanya tanpa kategori.
+        $snapshot = app(WasteReasonResolver::class)->forText($reason);
+
+        return DB::transaction(function () use ($itemIds, $reason, $snapshot) {
    
             $items = ProductionItem::whereIn('id', $itemIds)->get();
 
@@ -53,6 +57,7 @@ class WasteRecordService extends BaseService
                     'plate_color' => $item->plate_color,
                     'quantity' => 1,
                     'reason' => $reason,
+                    ...$snapshot,
                     'recorded_at' => now(),
                     'outlet_id' => $item->outlet_id,
                 ]);

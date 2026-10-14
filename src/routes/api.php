@@ -72,6 +72,7 @@ Route::prefix('master')
             Route::crud('menu', MasterController::class, 'menu');
             Route::crud('outlet', MasterController::class, 'outlet');
             Route::crud('waste-reason', MasterController::class, 'wastereason');
+            Route::crud('waste-category', MasterController::class, 'wastecategory');
             Route::crud('brand', MasterController::class, 'brand');
 
             // Setelan waktu per brand. Menulisnya admin saja, sama seperti
@@ -97,6 +98,7 @@ Route::prefix('master')
         Route::get('/menu', [MasterController::class, 'menuindex']);
         Route::get('/outlet', [MasterController::class, 'outletindex']);
         Route::get('/waste-reason', [MasterController::class, 'wastereasonindex']);
+        Route::get('/waste-category', [MasterController::class, 'wastecategoryindex']);
         Route::get('/brand', [MasterController::class, 'brandindex']);
         Route::get('/brand/{id}', [MasterController::class, 'brandshow'])->whereUuid('id');
 

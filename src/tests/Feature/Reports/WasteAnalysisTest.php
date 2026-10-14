@@ -6,6 +6,7 @@ use App\Models\Outlet;
 use App\Models\Menu;
 use App\Models\PlateColors;
 use App\Models\ProductionItem;
+use App\Models\WasteCategory;
 use App\Models\WasteRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesUsers;
@@ -98,6 +99,51 @@ class WasteAnalysisTest extends TestCase
 
         // by day trend has two days
         $this->assertCount(2, $data['byDay']);
+    }
+
+    /**
+     * `byCategory` dibaca dari snapshot di waste_records. Baris tanpa snapshot
+     * muncul sebagai UNCATEGORIZED, jadi totalnya tetap sama dengan totalWaste.
+     */
+    public function test_waste_analysis_breaks_waste_down_by_snapshotted_category(): void
+    {
+        $outlet  = $this->createOutlet();
+        $red     = $this->createPlateColor(['platename' => 'Merah', 'price' => 10000]);
+        $menu    = $this->createMenu($red);
+        $default = WasteCategory::where('code', WasteCategory::DEFAULT_CODE)->firstOrFail();
+
+        foreach ([[3, $default->id], [1, null]] as [$qty, $categoryId]) {
+            WasteRecord::create([
+                'menu_id'           => $menu->id,
+                'outlet_id'         => $outlet->id,
+                'plate_color'       => $red->id,
+                'quantity'          => $qty,
+                'reason'            => 'Expired',
+                'waste_category_id' => $categoryId,
+                'recorded_at'       => '2026-06-10 10:00:00',
+            ]);
+        }
+
+        $data = $this->getJson(
+            '/api/reports/waste-analysis?outletId=' . $outlet->id . '&startDate=2026-06-10&endDate=2026-06-10'
+        )->assertOk()->json('data');
+
+        $this->assertSame([
+            [
+                'categoryId'   => $default->id,
+                'categoryCode' => WasteCategory::DEFAULT_CODE,
+                'categoryName' => 'Default Waste',
+                'count'        => 3,
+                'percentage'   => 75,
+            ],
+            [
+                'categoryId'   => null,
+                'categoryCode' => WasteCategory::UNCATEGORIZED_CODE,
+                'categoryName' => WasteCategory::UNCATEGORIZED_NAME,
+                'count'        => 1,
+                'percentage'   => 25,
+            ],
+        ], $data['byCategory']);
     }
 
     public function test_waste_analysis_excludes_other_outlets_and_dates(): void

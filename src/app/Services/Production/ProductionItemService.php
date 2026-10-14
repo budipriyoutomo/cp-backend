@@ -4,6 +4,7 @@ namespace App\Services\Production;
 
 use App\Models\ProductionItem;
 use App\Models\Menu;
+use App\Models\WasteReason;
 use App\Models\WasteRecord;
 use App\Exceptions\BusinessRuleException;
 use App\Services\BaseService;
@@ -420,6 +421,9 @@ class ProductionItemService extends BaseService
 
         return DB::transaction(function () use ($items) {
             $reason = 'Auto-waste: plate tidak diselesaikan pada hari produksi';
+            // Teksnya dibiarkan seperti dulu (laporan `byReason` mengelompokkan
+            // per teks); kategorinya dari reason sistem "Auto-waste".
+            $snapshot = app(WasteReasonResolver::class)->forSystem(WasteReason::AUTO_WASTE);
 
             foreach ($items as $item) {
                 $item->update([
@@ -436,6 +440,7 @@ class ProductionItemService extends BaseService
                     'plate_color'        => $item->plate_color,
                     'quantity'           => $item->quantity ?? 1,
                     'reason'             => $reason,
+                    ...$snapshot,
                     'recorded_at'        => $item->produced_at,
                     'outlet_id'          => $item->outlet_id,
                 ]);

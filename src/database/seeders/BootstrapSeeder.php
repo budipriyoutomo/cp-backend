@@ -23,6 +23,7 @@ class BootstrapSeeder extends Seeder
             BrandSeeder::class,
             PlateColorSeeder::class,
             MenuSeeder::class,
+            WasteCategorySeeder::class,
             WasteReasonSeeder::class,
             OutletSeeder::class,
             AdminUserSeeder::class,

@@ -160,6 +160,36 @@ class PublishPendingClosingReportsTest extends TestCase
         $this->assertCount(1, $row->payload['data']['items']);
     }
 
+    /**
+     * Setelah v2 aktif, pesan v1 yang disusun ulang menjadi v2 dengan
+     * `messageId` yang sama. BI membuangnya sebagai duplikat (data v1 tetap
+     * berlaku) — itu disepakati, lihat docs/jawaban-bi-closing-report-v2.md.
+     */
+    public function test_rebuild_after_v2_is_enabled_sends_v2_with_the_same_message_id(): void
+    {
+        config(['rabbitmq.closing_report.payload_version' => '2']);
+        $row = $this->outbox([
+            'status'       => ClosingReportOutbox::STATUS_PUBLISHED,
+            'published_at' => now()->subDay(),
+            'payload'      => ['event' => 'closingreport.submitted', 'version' => 1, 'data' => ['items' => []]],
+        ]);
+        $report = $row->closingReport;
+        $menu = $this->createMenu(null, ['menuname' => 'Salmon Nigiri']);
+        $this->createProductionItem($report->outlet, $menu, [
+            'produced_at' => '2026-10-02 03:00:00', 'final_status' => 'waste', 'wasted_at' => '2026-10-02 03:00:00',
+        ]);
+
+        $this->artisan('closing-report:publish-pending', ['--id' => $row->id, '--rebuild' => true])
+            ->assertSuccessful();
+
+        $payload = $this->publisher->last()['payload'];
+        $this->assertSame(2, $payload['version']);
+        $this->assertSame($report->id, $payload['messageId']);
+        $this->assertSame([
+            ['categoryCode' => 'UNCATEGORIZED', 'categoryName' => 'Belum dikategorikan', 'quantity' => 1],
+        ], $payload['data']['items'][0]['wasteByCategory']);
+    }
+
     public function test_rebuild_dry_run_changes_nothing(): void
     {
         $row = $this->outbox(['status' => ClosingReportOutbox::STATUS_PUBLISHED, 'published_at' => now()]);

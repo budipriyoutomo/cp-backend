@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CloseDayLogController;
 use App\Http\Controllers\MasterController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProductionCorrectionController;
@@ -204,6 +205,10 @@ Route::prefix('reports')
     Route::get('/production-menu-detail', [ProductionController::class, 'productionMenuDetail']);
     Route::get('/daily-summary', [ReportsController::class, 'dailySummary']);
     Route::get('/waste-analysis', [ReportsController::class, 'wasteAnalysis']);
+
+    // Audit Tutup Hari (tombol di `/kitchen/conveyor`) + auto-waste tengah
+    // malam — layar `/report/close-day-logs`.
+    Route::get('/close-day-logs', [CloseDayLogController::class, 'index']);
 });
 
 // Membatalkan draft Sales Input — jalan keluar Koreksi Status Produksi, yang

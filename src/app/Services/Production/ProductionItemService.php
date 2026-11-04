@@ -2,6 +2,7 @@
 
 namespace App\Services\Production;
 
+use App\Models\CloseDayLog;
 use App\Models\ProductionItem;
 use App\Models\Menu;
 use App\Models\WasteReason;
@@ -342,17 +343,40 @@ class ProductionItemService extends BaseService
     | Sengaja dibatasi ke hari produksi berjalan: hari sebelumnya sudah ditutup
     | sebagai waste oleh autoWasteCarryOver(), dan laporan lama tidak boleh
     | berubah karena aksi hari ini.
+    |
+    | Setiap eksekusi dicatat ke `close_day_logs` di transaksi yang sama —
+    | termasuk yang menutup 0 piring — supaya audit bisa menjawab kapan tombol
+    | ini ditekan dan oleh siapa. `$context` membawa jejak request
+    | (client_request_id, ip_address, user_agent) dari controller.
     */
-    public function closeDaySold(string $outletId): int
+    public function closeDaySold(string $outletId, array $context = []): int
     {
-        return $this->query()
-            ->where('outlet_id', $outletId)
-            ->whereNull('final_status')
-            ->whereDate('produced_at', today())
-            ->update([
-                'final_status' => 'sold',
-                'sold_at'      => now(),
+        return DB::transaction(function () use ($outletId, $context) {
+            $stamp = now();
+
+            $closed = $this->query()
+                ->where('outlet_id', $outletId)
+                ->whereNull('final_status')
+                ->whereDate('produced_at', today())
+                ->update([
+                    'final_status' => 'sold',
+                    'sold_at'      => $stamp,
+                ]);
+
+            CloseDayLog::create([
+                'outlet_id'         => $outletId,
+                'action'            => CloseDayLog::ACTION_CLOSE_DAY,
+                'trigger'           => CloseDayLog::TRIGGER_BUTTON,
+                'business_date'     => today()->toDateString(),
+                'closed_count'      => $closed,
+                'executed_at'       => $stamp,
+                'client_request_id' => $context['client_request_id'] ?? null,
+                'ip_address'        => $context['ip_address'] ?? null,
+                'user_agent'        => $context['user_agent'] ?? null,
             ]);
+
+            return $closed;
+        });
     }
 
     /*
@@ -402,9 +426,16 @@ class ProductionItemService extends BaseService
     |--------------------------------------------------------------------------
     | Plate hari-hari sebelumnya yang belum diselesaikan (final_status NULL)
     | otomatis menjadi waste, diatribusikan ke hari produksinya — bukan hari ini.
+    |
+    | Setiap (outlet, hari produksi) yang tertutup dicatat ke `close_day_logs`
+    | dengan `action = auto_waste`. `business_date` = hari produksinya,
+    | `executed_at` = kapan auto-waste benar-benar jalan. Eksekusi yang tidak
+    | menemukan piring apa pun tidak dicatat: tidak ada outlet untuk ditempeli.
     */
-    public function autoWasteCarryOver(?string $outletId = null): int
-    {
+    public function autoWasteCarryOver(
+        ?string $outletId = null,
+        string $trigger = CloseDayLog::TRIGGER_COMMAND,
+    ): int {
         $query = ProductionItem::query()
             ->whereNull('final_status')
             ->whereDate('produced_at', '<', today());
@@ -419,7 +450,8 @@ class ProductionItemService extends BaseService
             return 0;
         }
 
-        return DB::transaction(function () use ($items) {
+        return DB::transaction(function () use ($items, $trigger) {
+            $stamp  = now();
             $reason = 'Auto-waste: plate tidak diselesaikan pada hari produksi';
             // Teksnya dibiarkan seperti dulu (laporan `byReason` mengelompokkan
             // per teks); kategorinya dari reason sistem "Auto-waste".
@@ -445,6 +477,17 @@ class ProductionItemService extends BaseService
                     'outlet_id'          => $item->outlet_id,
                 ]);
             }
+
+            $items
+                ->groupBy(fn ($item) => $item->outlet_id . '|' . $item->produced_at->toDateString())
+                ->each(fn ($group) => CloseDayLog::create([
+                    'outlet_id'     => $group->first()->outlet_id,
+                    'action'        => CloseDayLog::ACTION_AUTO_WASTE,
+                    'trigger'       => $trigger,
+                    'business_date' => $group->first()->produced_at->toDateString(),
+                    'closed_count'  => $group->count(),
+                    'executed_at'   => $stamp,
+                ]));
 
             return $items->count();
         });

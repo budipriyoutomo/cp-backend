@@ -68,6 +68,7 @@ class RouteProtectionTest extends TestCase
             'GET /reports/pos-data'          => ['get', '/api/reports/pos-data'],
             'GET /reports/daily-summary'     => ['get', '/api/reports/daily-summary'],
             'GET /reports/waste-analysis'    => ['get', '/api/reports/waste-analysis'],
+            'GET /reports/close-day-logs'    => ['get', '/api/reports/close-day-logs'],
             'GET /reports/menu-detail'       => ['get', '/api/reports/production-menu-detail'],
 
             // sales

@@ -177,7 +177,11 @@ namespace App\Http\Controllers;
                 'outletId' => ['required', 'uuid', 'exists:outlets,id'],
             ]);
 
-            $closed = $this->service->item->closeDaySold($request->outletId);
+            $closed = $this->service->item->closeDaySold($request->outletId, [
+                'client_request_id' => $request->header('X-Client-Request-Id'),
+                'ip_address'        => $request->ip(),
+                'user_agent'        => $request->userAgent(),
+            ]);
 
             return $this->success(
                 ['closed' => $closed],

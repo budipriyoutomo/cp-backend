@@ -9,10 +9,10 @@ use App\Models\ProductionItem;
 use App\Models\ProductionStatusCorrection;
 use App\Models\ProductionStatusCorrectionItem;
 use App\Models\SalesHeader;
-use App\Models\User;
 use App\Models\WasteReason;
 use App\Models\WasteRecord;
 use App\Services\BaseService;
+use App\Services\Concerns\ResolvesUserNames;
 use App\Services\Sales\SalesService;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -46,6 +46,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ProductionStatusCorrectionService extends BaseService
 {
+    use ResolvesUserNames;
+
     protected string $model = ProductionStatusCorrection::class;
 
     public const STATUSES = ['sold', 'waste'];
@@ -601,40 +603,5 @@ class ProductionStatusCorrectionService extends BaseService
                 'toSold'  => collect($lines)->where('to', 'sold')->sum('quantity'),
             ],
         ];
-    }
-
-    /**
-     * @param  Collection<int, ProductionStatusCorrection>  $corrections
-     */
-    private function attachCreatorNames(Collection $corrections): void
-    {
-        $names = $this->userNames($corrections->pluck('created_by'));
-
-        foreach ($corrections as $correction) {
-            $correction->setAttribute(
-                'creator_name',
-                $names[(int) trim((string) $correction->created_by)] ?? null
-            );
-        }
-    }
-
-    /**
-     * Nama user dari kolom userstamp. Kolomnya char sementara `users.id`
-     * bigint, jadi id yang bukan angka dibuang sebelum menyentuh query.
-     *
-     * @return Collection<int, string> id => name
-     */
-    private function userNames(Collection $ids): Collection
-    {
-        $ids = $ids
-            ->map(fn ($id) => trim((string) $id))
-            ->filter(fn ($id) => ctype_digit($id))
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
-
-        return $ids->isEmpty()
-            ? collect()
-            : User::query()->whereIn('id', $ids->all())->pluck('name', 'id');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Production\CloseDayLogService;
 use App\Services\Production\ProductionBackdateImportService;
 use App\Services\Production\ProductionBackdateTemplateService;
 use App\Services\Production\ProductionDashboardService;
@@ -29,5 +30,6 @@ class ProductionService
         public ProductionBackdateImportService $backdateImport,
         public ProductionBackdateTemplateService $backdateTemplate,
         public ProductionStatusCorrectionService $correction,
+        public CloseDayLogService $closeDayLog,
     ) {}
 }

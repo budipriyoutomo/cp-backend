@@ -13,7 +13,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // Tutup plate sisa hari sebelumnya tepat setelah pergantian hari.
-        $schedule->command('production:close-stale')
+        // `--scheduled` hanya menandai jejaknya di close_day_logs.
+        $schedule->command('production:close-stale --scheduled')
             ->dailyAt('00:05')
             ->withoutOverlapping();
 

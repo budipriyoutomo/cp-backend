@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\BusinessRuleException;
+use App\Models\CloseDayLog;
 use App\Models\POSData;
 use App\Models\PlateColors;
 use App\Models\Outlet;
@@ -42,7 +43,7 @@ class POSService
     {
         $date = Carbon::parse($date)->toDateString();
 
-        $this->productionItems->autoWasteCarryOver($outletId);
+        $this->productionItems->autoWasteCarryOver($outletId, CloseDayLog::TRIGGER_GET_DATA_POS);
 
         $pending = $this->productionItems->countUnresolved($outletId, $date);
 

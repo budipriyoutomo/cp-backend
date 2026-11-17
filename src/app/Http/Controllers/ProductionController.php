@@ -12,6 +12,7 @@ namespace App\Http\Controllers;
     use App\Http\Requests\Production\ProductionPlanRequest;
     use App\Http\Requests\Production\ProductionExpiredBulkChangeRequest;
     use App\Http\Requests\Production\MarkProductionItemsRequest;
+    use App\Http\Requests\Production\OutletQueryRequest;
     use App\Http\Requests\Production\WasteRecordRequest;
     use App\Http\Requests\Production\WasteIndexRequest;
 
@@ -28,7 +29,7 @@ namespace App\Http\Controllers;
         | GET STATS
         |--------------------------------------------------------------------------
         */
-        public function stats(Request $request)
+        public function stats(OutletQueryRequest $request)
         {
             $data = $this->service->dashboard->stats($request->outletId);
 
@@ -93,7 +94,7 @@ namespace App\Http\Controllers;
         | CONVEYOR (PER BATCH PRODUKSI)
         |--------------------------------------------------------------------------
         */
-        public function conveyorGrouped(Request $request)
+        public function conveyorGrouped(OutletQueryRequest $request)
         {
             $groups = $this->service->item->conveyorGrouped($request->outletId);
 
@@ -107,7 +108,7 @@ namespace App\Http\Controllers;
         | EXPIRED ITEMS (PER BATCH PRODUKSI)
         |--------------------------------------------------------------------------
         */
-        public function expiredGrouped(Request $request)
+        public function expiredGrouped(OutletQueryRequest $request)
         {
             $groups = $this->service->item->expiredGrouped($request->outletId);
 

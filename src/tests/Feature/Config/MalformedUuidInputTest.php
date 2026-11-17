@@ -56,7 +56,36 @@ class MalformedUuidInputTest extends TestCase
             'waste summary'       => ['/api/waste/summary?outletId=abc&date=2026-06-17'],
             'data closing report' => ['/api/closing-reports/data?outletId=abc&date=2026-06-17'],
             'baca plan produksi'  => ['/api/production/plan?outletId=abc&date=2026-06-17'],
+            'stats produksi'      => ['/api/production/stats?outletId=abc'],
+            'conveyor grouped'    => ['/api/production/conveyor-grouped?outletId=abc'],
+            'expired grouped'     => ['/api/production/expired-grouped?outletId=abc'],
         ];
+    }
+
+    /**
+     * Endpoint yang service-nya ber-type-hint `string $outletId`. Tanpa
+     * validasi, outlet yang hilang menjadi `null` → TypeError → 500.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function outletRequiredEndpoints(): array
+    {
+        return [
+            'stats produksi'   => ['/api/production/stats'],
+            'conveyor grouped' => ['/api/production/conveyor-grouped'],
+            'expired grouped'  => ['/api/production/expired-grouped'],
+        ];
+    }
+
+    /**
+     * @dataProvider outletRequiredEndpoints
+     */
+    public function test_missing_outlet_id_is_rejected_with_422(string $url): void
+    {
+        $this->getJson($url)
+            ->assertStatus(422)
+            ->assertJsonPath('status', false)
+            ->assertJsonValidationErrors('outletId', 'errors');
     }
 
     /**

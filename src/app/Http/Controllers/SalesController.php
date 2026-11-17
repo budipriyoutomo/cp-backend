@@ -104,7 +104,7 @@ class SalesController extends BaseApiController
     // ==========================
     public function show($id)
     {
-        return $this->resource(new SalesResource($this->service->show($id)));
+        return $this->resource(new SalesResource($this->service->show($id, auth()->user())));
     }
 
     // ==========================
@@ -136,7 +136,7 @@ class SalesController extends BaseApiController
      */
     public function destroy(string $id, CancelSalesDraftRequest $request)
     {
-        $header = $this->service->cancelDraft($id, $request->validated()['reason']);
+        $header = $this->service->cancelDraft($id, $request->validated()['reason'], $request->user());
 
         return $this->success([
             'id'             => $header->id,

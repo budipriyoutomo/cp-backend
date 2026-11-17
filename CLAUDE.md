@@ -49,6 +49,14 @@ Subclass cukup mendeklarasikan `$model`, `$relations`, `$searchable`, `$sortable
 ### `Services\Concerns\ResolvesOutletBrand`
 Satu outlet melayani satu brand, jadi pemanggil cukup tahu outlet. Trait ini memegang aturan penyaringannya di satu tempat — dipakai `MenuService`, `PlateColorService`, `ProductionDashboardService`, `ProductionItemService`, dan `ProductionPlanService`. Aturannya: baris milik brand outlet ikut, baris ber-`brand_id` NULL juga ikut, baris brand lain tidak. Outlet tanpa brand tidak menyaring apa pun. **Jangan tulis ulang aturan ini di service baru** — kalau ada dua versi, keduanya akan menyimpang pelan-pelan.
 
+### `Support\OutletGate` — izin outlet untuk data yang dicari lewat id
+Satu-satunya tempat aturan "user ini boleh outlet apa": admin semua outlet, user lain hanya kode di `users.outlet` (dibandingkan setelah `strtolower(trim())`), `outlet` kosong = tidak boleh apa pun. Middleware `outlet.access` memakainya untuk parameter `outletId`/`outlet_id`, tapi middleware itu **tidak bisa** memeriksa request tanpa parameter outlet — `GET /sales/{id}`, `DELETE /closing-reports/{id}`, dst. Untuk itu service memeriksa sendiri setelah record ditemukan:
+
+- **Baca** (`show`): `ensureVisible($user, $record)` → milik outlet lain dijawab **404**, sama persis dengan id yang tidak ada, supaya keberadaan id tidak bocor.
+- **Mutasi** (`destroy`, `resend`): `authorize($user, $outletId)` → **403** `'Outlet ini tidak termasuk akses Anda'`, diperiksa **sebelum** aturan status supaya 409 tidak membocorkan keadaan record outlet lain.
+
+Polanya: method `xxxFor(User $actor, string $id)` untuk endpoint, method lama tanpa user tetap untuk pemakaian internal yang outletnya sudah diperiksa (mis. `ClosingReportService::show()` dari `submit()`, `ClosingReportOutboxService::resend()` dari CLI). Endpoint baru berbasis id **wajib** lewat salah satu dari dua method gate itu. Dijaga `OutletScopedRecordAccessTest`.
+
 ### `Master\TimeSlotService` + `TimeMarkerService`
 Setelan waktu per brand: time slot produksi dan penanda waktu yang menempel ke piring. Diatur di `/admin/brand-settings`, dibaca layar planning, conveyor, dan expired.
 

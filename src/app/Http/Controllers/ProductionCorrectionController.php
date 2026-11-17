@@ -60,7 +60,7 @@ class ProductionCorrectionController extends BaseApiController
     public function show(string $id)
     {
         return $this->success(
-            (new ProductionCorrectionResource($this->service->correction->show($id)))
+            (new ProductionCorrectionResource($this->service->correction->showFor(auth()->user(), $id)))
                 ->withItems()
                 ->resolve()
         );

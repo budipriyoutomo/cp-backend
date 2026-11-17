@@ -5,6 +5,8 @@ namespace App\Services\ClosingReport;
 use App\Exceptions\BusinessRuleException;
 use App\Models\ClosingReport;
 use App\Models\ClosingReportOutbox;
+use App\Models\User;
+use App\Support\OutletGate;
 use Illuminate\Pagination\LengthAwarePaginator;
 use App\Services\Messaging\MessagePublisher;
 use Illuminate\Support\Facades\Log;
@@ -32,6 +34,7 @@ class ClosingReportOutboxService
     public function __construct(
         private readonly ClosingReportPayloadBuilder $payloads,
         private readonly MessagePublisher $publisher,
+        private readonly OutletGate $outletGate,
     ) {
     }
 
@@ -106,6 +109,21 @@ class ClosingReportOutboxService
      *
      * @throws BusinessRuleException 409 kalau sudah terkirim
      */
+    /**
+     * `POST /closing-reports/outbox/{id}/resend`. Route-nya `role:admin`, jadi
+     * hari ini selalu lolos; diperiksa supaya aturannya tetap satu dengan
+     * endpoint lain. Outbox tidak punya `outlet_id` — outletnya milik laporan.
+     * CLI (`publish-pending --id`) tidak punya user dan tetap memakai resend().
+     */
+    public function resendFor(User $actor, string $id): ClosingReportOutbox
+    {
+        $outbox = ClosingReportOutbox::with('closingReport')->findOrFail($id);
+
+        $this->outletGate->authorize($actor, (string) $outbox->closingReport?->outlet_id);
+
+        return $this->resend($outbox);
+    }
+
     public function resend(ClosingReportOutbox $outbox): ClosingReportOutbox
     {
         if ($outbox->status === ClosingReportOutbox::STATUS_PUBLISHED) {

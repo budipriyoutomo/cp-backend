@@ -7,6 +7,8 @@ use App\Models\ClosingReport;
 use App\Models\ClosingReportEntry;
 use App\Models\SalesHeader;
 use App\Models\SalesItem;
+use App\Models\User;
+use App\Support\OutletGate;
 use App\Services\BaseService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -28,6 +30,7 @@ class ClosingReportService extends BaseService
 
     public function __construct(
         private readonly ClosingReportOutboxService $outbox,
+        private readonly OutletGate $outletGate,
     ) {
     }
 
@@ -56,9 +59,26 @@ class ClosingReportService extends BaseService
         return $query->orderByDesc('date')->paginate($perPage);
     }
 
+    /**
+     * Tanpa pemeriksaan outlet — dipakai di dalam service setelah outletnya
+     * sudah diperiksa (getData/submit). Endpoint memakai showFor().
+     */
     public function show(string $id): ClosingReport
     {
         return ClosingReport::with($this->relations)->findOrFail($id);
+    }
+
+    /**
+     * `GET /closing-reports/{id}`. Laporan outlet lain dijawab 404, sama
+     * dengan id yang tidak ada, supaya keberadaan id tidak bocor.
+     */
+    public function showFor(User $actor, string $id): ClosingReport
+    {
+        $report = $this->show($id);
+
+        $this->outletGate->ensureVisible($actor, $report);
+
+        return $report;
     }
 
     public function getData(
@@ -163,6 +183,24 @@ class ClosingReportService extends BaseService
         return $this->show($reportId);
     }
 
+
+    /**
+     * `DELETE /closing-reports/{id}`. `role:admin,manager` hanya menjawab
+     * "boleh menghapus", bukan "boleh menghapus milik outlet mana" — tanpa ini
+     * manager outlet A bisa menghapus draft outlet B. Diperiksa sebelum status
+     * supaya pesan 409 tidak membocorkan keadaan laporan outlet lain.
+     *
+     * Method terpisah (bukan argumen di delete()) karena delete() meng-override
+     * BaseService::delete($id), yang signature-nya tidak boleh berubah.
+     */
+    public function deleteFor(User $actor, string $id): ?ClosingReport
+    {
+        $report = ClosingReport::findOrFail($id);
+
+        $this->outletGate->authorize($actor, (string) $report->outlet_id);
+
+        return $this->delete($report->id);
+    }
 
     public function delete($id): ?ClosingReport
     {

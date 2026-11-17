@@ -27,7 +27,7 @@ class ClosingReportOutboxController extends BaseApiController
 
     public function resend(string $id)
     {
-        $row = $this->service->resend(ClosingReportOutbox::findOrFail($id));
+        $row = $this->service->resendFor(auth()->user(), $id);
 
         return $this->resource(
             new ClosingReportOutboxResource($row),

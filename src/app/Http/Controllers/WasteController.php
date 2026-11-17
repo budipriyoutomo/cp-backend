@@ -67,7 +67,7 @@ class WasteController extends BaseApiController
      */
     public function show(WasteRecord $waste)
     {
-        $data = $this->service->wasteReport->getById($waste);
+        $data = $this->service->wasteReport->getById($waste, auth()->user());
 
         return $this->success(
             new WasteResource($data),

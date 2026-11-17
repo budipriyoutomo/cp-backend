@@ -9,11 +9,13 @@ use App\Models\ProductionItem;
 use App\Models\ProductionStatusCorrection;
 use App\Models\ProductionStatusCorrectionItem;
 use App\Models\SalesHeader;
+use App\Models\User;
 use App\Models\WasteReason;
 use App\Models\WasteRecord;
 use App\Services\BaseService;
 use App\Services\Concerns\ResolvesUserNames;
 use App\Services\Sales\SalesService;
+use App\Support\OutletGate;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -54,6 +56,7 @@ class ProductionStatusCorrectionService extends BaseService
 
     public function __construct(
         private readonly SalesService $sales,
+        private readonly OutletGate $outletGate,
     ) {
     }
 
@@ -223,6 +226,20 @@ class ProductionStatusCorrectionService extends BaseService
         $this->attachCreatorNames($page->getCollection());
 
         return $page;
+    }
+
+    /**
+     * `GET /production/corrections/{id}`. Route-nya `role:admin`, jadi hari
+     * ini selalu lolos; koreksi outlet lain dijawab 404 seperti show lain.
+     * store() tetap memakai show() karena outletnya sudah diperiksa.
+     */
+    public function showFor(User $actor, string $id): ProductionStatusCorrection
+    {
+        $correction = $this->show($id);
+
+        $this->outletGate->ensureVisible($actor, $correction);
+
+        return $correction;
     }
 
     public function show(string $id): ProductionStatusCorrection

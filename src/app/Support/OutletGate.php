@@ -5,6 +5,8 @@ namespace App\Support;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Outlet;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 /**
  * Satu-satunya tempat aturan "user ini boleh outlet apa".
@@ -75,6 +77,9 @@ final class OutletGate
         }
 
         if (is_string($outlet)) {
+            // Beberapa kolom `outlet_id` lama terbaca dengan spasi di ujung
+            // (lihat SalesController::destroy yang men-trim-nya).
+            $outlet = trim($outlet);
             $outlet = Uuid::matches($outlet) ? Outlet::find($outlet) : null;
 
             if (! $outlet) {
@@ -96,6 +101,23 @@ final class OutletGate
     {
         if (! $this->canAccess($user, $outlet)) {
             throw new BusinessRuleException(self::DENIED_MESSAGE, 403);
+        }
+    }
+
+    /**
+     * Untuk endpoint baca berbasis id: record milik outlet lain dijawab persis
+     * seperti id yang tidak ada (`ModelNotFoundException` → 404), supaya
+     * keberadaan id outlet lain tidak bocor lewat beda 403 vs 404.
+     *
+     * Mutasi memakai `authorize()` (403) — user yang memegang id dari layar
+     * yang sah perlu tahu kenapa aksinya ditolak.
+     *
+     * @throws ModelNotFoundException
+     */
+    public function ensureVisible(User $user, Model $record, string $outletColumn = 'outlet_id'): void
+    {
+        if (! $this->canAccess($user, (string) $record->getAttribute($outletColumn))) {
+            throw (new ModelNotFoundException())->setModel($record::class, [$record->getKey()]);
         }
     }
 

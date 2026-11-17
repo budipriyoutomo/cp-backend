@@ -4,7 +4,9 @@ namespace App\Services\Production;
 
 use App\Models\PlateColors;
 use App\Models\ProductionItem;
+use App\Models\User;
 use App\Models\WasteRecord;
+use App\Support\OutletGate;
 use App\Support\Uuid;
 use Illuminate\Support\Facades\DB;
 
@@ -122,8 +124,13 @@ class WasteService
     /**
      * Get detail by id
      */
-    public function getById(WasteRecord $waste)
+    /**
+     * Record ditemukan lewat route model binding, tanpa parameter outlet —
+     * jadi `outlet.access` tidak memeriksanya. Milik outlet lain dijawab 404.
+     */
+    public function getById(WasteRecord $waste, User $actor)
     {
+        app(OutletGate::class)->ensureVisible($actor, $waste);
         return $waste->load([
             'menu:id,menuname',
             'outlet:id,name,code',

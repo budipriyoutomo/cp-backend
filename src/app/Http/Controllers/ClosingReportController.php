@@ -53,7 +53,7 @@ class ClosingReportController extends BaseApiController
     public function show(string $id)
     {
         return $this->resource(
-            new ClosingReportResource($this->service->show($id))
+            new ClosingReportResource($this->service->showFor(auth()->user(), $id))
         );
     }
 
@@ -90,7 +90,7 @@ class ClosingReportController extends BaseApiController
 
     public function destroy(string $id)
     {
-        $this->service->delete($id);
+        $this->service->deleteFor(auth()->user(), $id);
 
         return $this->success(null, 'Draft deleted');
     }

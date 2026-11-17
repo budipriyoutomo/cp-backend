@@ -8,6 +8,8 @@ use App\Models\ProductionStatusCorrection;
 use App\Models\SalesHeader;
 use App\Models\SalesItem;
 use App\Models\SalesItemDetail;
+use App\Models\User;
+use App\Support\OutletGate;
 use App\Http\Resources\Sales\SalesClosingReportResource;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,7 @@ class SalesService extends BaseAggregateService
 
     public function __construct(
         private readonly ProductionItemService $productionItems,
+        private readonly OutletGate $outletGate,
     ) {
     }
 
@@ -147,10 +150,15 @@ class SalesService extends BaseAggregateService
      * Tautannya dilepas dan entries-nya dibuang supaya dibangkitkan ulang dari
      * Sales Input yang baru (`findOrCreateReport()` menautkan ulang).
      */
-    public function cancelDraft(string $id, string $reason): SalesHeader
+    public function cancelDraft(string $id, string $reason, User $actor): SalesHeader
     {
-        return DB::transaction(function () use ($id, $reason) {
+        return DB::transaction(function () use ($id, $reason, $actor) {
             $header = SalesHeader::query()->lockForUpdate()->findOrFail($id);
+
+            // Route-nya `role:admin`, jadi hari ini selalu lolos. Tetap diperiksa
+            // supaya jalur lain yang memanggil service ini ikut terlindungi.
+            // Mutasi → 403, bukan 404 (lihat OutletGate::ensureVisible()).
+            $this->outletGate->authorize($actor, (string) $header->outlet_id);
 
             if ($header->status !== 'draft') {
                 throw new BusinessRuleException(
@@ -358,10 +366,19 @@ class SalesService extends BaseAggregateService
             ->first();
     }
 
-    public function show(string $id)
+    /**
+     * Sales outlet lain dijawab 404, sama dengan id yang tidak ada — supaya
+     * keberadaan id outlet lain tidak bocor. Route ini tidak membawa parameter
+     * outlet, jadi middleware `outlet.access` tidak memeriksanya.
+     */
+    public function show(string $id, User $actor)
     {
-        return SalesHeader::with(['items.details', 'items.plateColor'])
+        $header = SalesHeader::with(['items.details', 'items.plateColor'])
             ->findOrFail($id);
+
+        $this->outletGate->ensureVisible($actor, $header);
+
+        return $header;
     }
 
    

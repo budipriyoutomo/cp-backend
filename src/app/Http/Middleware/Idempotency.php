@@ -28,10 +28,34 @@ class Idempotency
             return $next($request);
         }
 
-        // Replay the stored outcome if this request was already processed.
+        // Middleware ini berjalan di grup `api`, SEBELUM `auth:api` di route —
+        // dan guard default-nya `web`, jadi `$request->user()` di sini selalu
+        // null untuk token JWT. Guard `api` dibaca eksplisit.
+        //
+        // Tanpa user yang sah tidak ada yang diputar ulang maupun disimpan:
+        // `auth:api` akan menjawab 401, dan menjawab 409 di sini justru
+        // memberi tahu orang tanpa token bahwa key itu pernah dipakai.
+        $userId = $this->userIdOf($request);
+
+        if ($userId === null) {
+            return $next($request);
+        }
+
         $existing = ProcessedRequest::where('request_id', $key)->first();
 
         if ($existing) {
+            // Key tetap unik global (unique index di `request_id`), tapi hanya
+            // boleh diputar ulang untuk pemiliknya, di endpoint yang sama.
+            // Dulu respons — termasuk body-nya — diputar ulang untuk siapa pun
+            // yang mengirim key itu, ke path mana pun.
+            if (! $this->belongsTo($existing, $request, $userId)) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Request ID sudah dipakai',
+                    'errors'  => null,
+                ], 409);
+            }
+
             return response($existing->response_body, $existing->response_status)
                 ->header('Content-Type', 'application/json')
                 ->header('X-Idempotent-Replay', 'true');
@@ -42,10 +66,28 @@ class Idempotency
         // Only persist successful outcomes — those are the ones whose
         // re-execution would create duplicates. 4xx/5xx are left to run again.
         if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
-            $this->remember($request, $key, $response);
+            $this->remember($request, $key, $userId, $response);
         }
 
         return $response;
+    }
+
+    /**
+     * `users.id` auto-increment (bukan uuid), jadi dibandingkan sebagai string
+     * supaya int vs string dari driver berbeda tidak membuat pemilik sah ditolak.
+     */
+    private function userIdOf(Request $request): ?string
+    {
+        $user = auth('api')->user();
+
+        return $user ? (string) $user->getAuthIdentifier() : null;
+    }
+
+    private function belongsTo(ProcessedRequest $row, Request $request, string $userId): bool
+    {
+        return (string) $row->user_id === $userId
+            && $row->path === $request->path()
+            && $row->method === $request->method();
     }
 
     private function isIdempotent(Request $request): bool
@@ -63,14 +105,14 @@ class Idempotency
         return true;
     }
 
-    private function remember(Request $request, string $key, Response $response): void
+    private function remember(Request $request, string $key, string $userId, Response $response): void
     {
         try {
             ProcessedRequest::create([
                 'request_id'      => $key,
                 'method'          => $request->method(),
                 'path'            => $request->path(),
-                'user_id'         => optional($request->user())->id,
+                'user_id'         => $userId,
                 'response_status' => $response->getStatusCode(),
                 'response_body'   => $response->getContent(),
             ]);

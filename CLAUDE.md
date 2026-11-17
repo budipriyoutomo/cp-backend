@@ -156,7 +156,8 @@ Migration memakai macro `$table->fullstamps()` (mendefinisikan `created_by`/`upd
 - Aktif untuk POST/PUT/PATCH yang membawa header `X-Client-Request-Id`.
 - Melewatkan endpoint auth (`login`, `login-pin`, `logout`, `register`, `auth/refresh`).
 - Menyimpan respons **sukses saja** (2xx) ke tabel `processed_requests`; 4xx/5xx dibiarkan bisa dijalankan ulang.
-- Request ulang dengan key sama → respons tersimpan diputar ulang + header `X-Idempotent-Replay: true`.
+- Request ulang dengan key sama → respons tersimpan diputar ulang + header `X-Idempotent-Replay: true` — **hanya** kalau user, path, dan method-nya sama dengan yang menyimpan. Key yang sama dari user lain atau ke endpoint lain → `409 "Request ID sudah dipakai"`, tidak dijalankan dan tidak diputar ulang. Key tetap unik global (unique index `request_id`).
+- User dibaca lewat `auth('api')->user()`, **bukan** `$request->user()`: middleware ini berjalan sebelum `auth:api` dan guard default-nya `web`, jadi `$request->user()` di sini selalu null. Tanpa user yang sah tidak ada replay maupun penyimpanan — `auth:api` yang menjawab 401. Test-nya (`IdempotencyScopeTest`) memakai token JWT sungguhan, bukan `actingAs()`, karena `actingAs($u, 'api')` ikut memindahkan guard default dan menutupi bug ini.
 - `QueryException` saat menyimpan (race condition dua request bersamaan) sengaja ditelan.
 
 **`RoleMiddleware`** (alias `role`) — `role:admin,kitchen` mengizinkan salah satu. Menolak dengan 403 `{ success: false, message: 'Unauthorized access' }`.

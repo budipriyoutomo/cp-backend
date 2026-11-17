@@ -35,15 +35,42 @@ class PlateColorSeeder extends Seeder
             // ditulis. Tanpa itu, dijalankan ulang di basis data dua-brand akan
             // menemukan "WHITE" milik brand mana pun yang kebetulan lebih dulu
             // lalu menimpa harganya.
-            PlateColors::updateOrCreate(
-                ['platename' => $name, 'brand_id' => $brandId],
-                [
-                    'price' => $price,
-                    'description' => $name . ' plate',
-                    'target_foodcost' => 0,
-                    'is_active' => true,
-                ]
-            );
+            //
+            // Baris ber-`brand_id` NULL ("belum ditetapkan") milik brand
+            // tunggal itu diambil alih, bukan diduplikasi. Tanpa ini, run
+            // pertama di DB kosong menulis warna tanpa brand (brand baru dibuat
+            // OutletSeeder sesudahnya), dan run kedua membuat 9 warna lagi.
+            $color = PlateColors::query()
+                ->where('platename', $name)
+                ->where('brand_id', $brandId)
+                ->first()
+                ?? self::unassigned($brandId, $name)
+                ?? new PlateColors(['platename' => $name]);
+
+            $color->fill([
+                'brand_id'        => $brandId,
+                'price'           => $price,
+                'description'     => $name . ' plate',
+                'target_foodcost' => 0,
+                'is_active'       => true,
+            ])->save();
         }
+    }
+
+    /**
+     * Baris tanpa brand dengan nama sama — hanya dicari kalau ada brand
+     * tunggal. Dengan dua brand atau lebih `soleBrandId()` mengembalikan NULL,
+     * jadi tidak ada yang diambil alih diam-diam.
+     */
+    private static function unassigned(?string $brandId, string $name): ?PlateColors
+    {
+        if ($brandId === null) {
+            return null;
+        }
+
+        return PlateColors::query()
+            ->where('platename', $name)
+            ->whereNull('brand_id')
+            ->first();
     }
 }

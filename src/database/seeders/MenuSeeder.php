@@ -141,7 +141,13 @@ class MenuSeeder extends Seeder
 
             // `brand_id` ikut jadi kunci pencocokan: kode menu unik di dalam
             // brand, bukan global.
-            $menu = Menu::firstOrNew(['code' => $code, 'brand_id' => $brandId]);
+            // Baris tanpa brand dengan kode sama diambil alih oleh brand
+            // tunggal, bukan diduplikasi — alasan sama dengan PlateColorSeeder.
+            $menu = Menu::query()->where('code', $code)->where('brand_id', $brandId)->first()
+                ?? ($brandId !== null
+                    ? Menu::query()->where('code', $code)->whereNull('brand_id')->first()
+                    : null)
+                ?? new Menu(['code' => $code]);
 
             $menu->fill([
                 'menuname'       => $name,

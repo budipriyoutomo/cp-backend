@@ -26,20 +26,45 @@ class BootstrapSeederTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const KEYS = [
+        'BOOTSTRAP_BRANDS',
+        'BOOTSTRAP_OUTLETS',
+        'BOOTSTRAP_ADMIN_EMAIL',
+        'BOOTSTRAP_ADMIN_PASSWORD',
+        'BOOTSTRAP_ADMIN_NAME',
+    ];
+
+    /**
+     * Ditulis ke ketiga tempat yang dibaca `env()`. Dotenv memuat `.env` ke
+     * `$_SERVER` dan `$_ENV`, dan repository `env()` Laravel membaca `$_SERVER`
+     * **lebih dulu** — menulis `putenv()` + `$_ENV` saja kalah oleh nilai `.env`.
+     * Akibatnya dulu: `.env` hasil salinan `.env.example` (BOOTSTRAP_ADMIN_EMAIL=
+     * kosong) membuat seeder melempar RuntimeException, dan `.env` lokal berisi
+     * nilai sungguhan membocorkan nilainya ke test.
+     */
     private function withBootstrapEnv(array $values): void
     {
         foreach ($values as $key => $value) {
             putenv("{$key}={$value}");
-            $_ENV[$key] = $value;
+            $_ENV[$key]    = $value;
+            $_SERVER[$key] = $value;
         }
     }
 
     private function clearBootstrapEnv(): void
     {
-        foreach (['BOOTSTRAP_BRANDS', 'BOOTSTRAP_OUTLETS', 'BOOTSTRAP_ADMIN_EMAIL', 'BOOTSTRAP_ADMIN_PASSWORD', 'BOOTSTRAP_ADMIN_NAME'] as $key) {
+        foreach (self::KEYS as $key) {
             putenv($key);
-            unset($_ENV[$key]);
+            unset($_ENV[$key], $_SERVER[$key]);
         }
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Setiap test mulai dari "tidak dikonfigurasi", apa pun isi `.env` mesin ini.
+        $this->clearBootstrapEnv();
     }
 
     protected function tearDown(): void

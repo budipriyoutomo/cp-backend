@@ -9,9 +9,10 @@ use App\Models\SalesHeader;
 use App\Models\SalesItem;
 use App\Models\User;
 use App\Support\OutletGate;
+use App\Support\Uuid;
+use Illuminate\Http\Request;
 use App\Services\BaseService;
 use Carbon\Carbon;
-use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -34,24 +35,36 @@ class ClosingReportService extends BaseService
     ) {
     }
 
+    /**
+     * Filter outlet **wajib**, bukan `if filled` — tanpa itu laporan semua
+     * outlet ikut terbawa. Controller memvalidasinya lewat
+     * `ClosingReportIndexRequest`; pemeriksaan di sini lapis kedua untuk
+     * pemanggil lain. Signature tetap `Request` karena meng-override
+     * BaseService::list() — mengganti nama justru membuka list() induk yang
+     * tanpa filter.
+     */
     public function list(Request $request): LengthAwarePaginator
     {
-        $query = $this->query()->with($this->relations);
+        $outletId = $request->input('outletId');
 
-        if ($request->filled('outletId')) {
-            $query->where('outlet_id', $request->outletId);
+        if (! Uuid::matches($outletId)) {
+            throw new BusinessRuleException('Outlet wajib dipilih', 422);
         }
 
+        $query = $this->query()
+            ->with($this->relations)
+            ->where('outlet_id', $outletId);
+
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $query->where('status', $request->input('status'));
         }
 
         if ($request->filled('startDate')) {
-            $query->whereDate('date', '>=', $request->startDate);
+            $query->whereDate('date', '>=', $request->input('startDate'));
         }
 
         if ($request->filled('endDate')) {
-            $query->whereDate('date', '<=', $request->endDate);
+            $query->whereDate('date', '<=', $request->input('endDate'));
         }
 
         $perPage = min((int) $request->query('per_page', 15), 100);

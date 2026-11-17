@@ -170,7 +170,8 @@ class ClosingReportTest extends TestCase
             'operationLeader' => 'Sari',
         ])->assertOk();
 
-        $this->getJson('/api/closing-reports')
+        // outletId wajib sejak ClosingReportIndexRequest — lihat ClosingReportIndexScopeTest.
+        $this->getJson('/api/closing-reports?outletId=' . $outlet->id)
             ->assertOk()
             ->assertJsonPath('status', true)
             ->assertJsonCount(1, 'data')

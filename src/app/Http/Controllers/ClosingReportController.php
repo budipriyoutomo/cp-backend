@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ClosingReport\ClosingReportDataRequest;
+use App\Http\Requests\ClosingReport\ClosingReportIndexRequest;
 use App\Http\Requests\ClosingReport\StoreClosingReportRequest;
 use App\Http\Requests\ClosingReport\SubmitClosingReportRequest;
 use App\Http\Requests\ClosingReport\UploadWastePhotosRequest;
 use App\Http\Resources\ClosingReport\ClosingReportResource;
 use App\Services\ClosingReport\ClosingReportService;
 use App\Services\Sales\SalesService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -20,15 +20,8 @@ class ClosingReportController extends BaseApiController
         protected SalesService $salesService
     ) {}
 
-    public function index(Request $request)
+    public function index(ClosingReportIndexRequest $request)
     {
-        // `list()` meneruskan `?outletId=` apa adanya ke `where('outlet_id', ...)`
-        // dan kolomnya bertipe uuid — bentuk yang salah menjawab 500, bukan 422.
-        $request->validate([
-            'outletId' => ['sometimes', 'uuid'],
-            'date'     => ['sometimes', 'date'],
-        ]);
-
         return $this->resource(
             ClosingReportResource::collection($this->service->list($request))
         );

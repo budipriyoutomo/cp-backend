@@ -75,6 +75,16 @@ class EnvExampleTest extends TestCase
         }
     }
 
+    /**
+     * `.env` baru disalin dari berkas ini. Default `true` berarti setup yang
+     * lupa mengubahnya membocorkan stack trace — berisi SQL, path, dan kadang
+     * kredensial — ke klien. Developer menyalakannya sendiri di lokal.
+     */
+    public function test_env_example_ships_debug_off(): void
+    {
+        $this->assertMatchesRegularExpression('/^APP_DEBUG=false\s*$/m', $this->envExample());
+    }
+
     private function envExample(): string
     {
         $path = base_path('.env.example');

@@ -8,6 +8,8 @@ WORKDIR /var/www/html
 # gd dan zip dipasang untuk phpoffice/phpspreadsheet (template impor produksi
 # backdate): keduanya ada di daftar require paketnya, jadi tanpa ini `composer
 # install` di bawah gagal — bukan request pertama yang gagal.
+# bcmath untuk php-amqplib (worker POS + publish closing report ke BI) — sama:
+# tanpa ini composer install gagal.
 RUN apt-get update && apt-get install -y \
     git unzip libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libxml2-dev libpq-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \

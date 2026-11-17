@@ -172,7 +172,7 @@ Sebelum ini ada, `module_app` cuma dipakai frontend: daftarnya ikut di klaim JWT
 
 ## Auth
 
-JWT via `tymon/jwt-auth`. Guard `api`. Sanctum masih ter-install dan dipakai di satu route `/user` sisa scaffolding, tapi bukan mekanisme utama.
+JWT via `tymon/jwt-auth`. Guard `api`. Sanctum masih ter-install tapi tidak dipakai rute mana pun — route scaffolding `GET /user` (`auth:sanctum`) sudah dibuang supaya tidak ada jalur auth kedua yang tak terawat. Jangan tambahkan rute `auth:sanctum`.
 
 Custom claims di token: `role`, `departemen`, `outlet`, `module_app`. **PIN sengaja tidak ikut** — payload JWT hanya base64, bukan enkripsi.
 

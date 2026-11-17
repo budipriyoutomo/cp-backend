@@ -114,6 +114,16 @@ class RouteProtectionTest extends TestCase
         $this->json(strtoupper($method), $uri)->assertStatus(401);
     }
 
+    /**
+     * Sisa scaffolding: satu-satunya rute ber-`auth:sanctum`, sementara seluruh
+     * sistem memakai JWT `auth:api`. Jalur auth kedua yang tidak dirawat siapa
+     * pun — dan `/auth/me` sudah melayani kebutuhan yang sama.
+     */
+    public function test_the_leftover_sanctum_user_route_is_gone(): void
+    {
+        $this->getJson('/api/user')->assertNotFound();
+    }
+
     public function test_an_authenticated_user_gets_past_the_guard(): void
     {
         $outlet = $this->createOutlet();

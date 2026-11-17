@@ -19,6 +19,21 @@ cd /var/www/html
 # tersalin ke image, config:cache akan membacanya duluan. Jadi buang eksplisit.
 php artisan config:clear
 php artisan config:cache
+
+# APP_DEBUG=true di produksi membocorkan stack trace (SQL, path, kadang
+# kredensial) ke setiap klien yang memicu error. Diperiksa dari config yang
+# BARU di-cache — itulah nilai yang benar-benar dipakai aplikasi, apa pun
+# bentuk tulisannya di env ("true", "1", "TRUE"). Lebih baik container gagal
+# start dengan pesan jelas daripada jalan dan bocor diam-diam.
+if ! php -r '
+    require "vendor/autoload.php";
+    $app = require "bootstrap/app.php";
+    $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+    exit(config("app.env") === "production" && config("app.debug") ? 1 : 0);
+'; then
+    echo "FATAL: APP_ENV=production dengan APP_DEBUG=true. Set APP_DEBUG=false lalu restart container." >&2
+    exit 1
+fi
 php artisan route:cache
 php artisan view:cache
 

@@ -9,6 +9,9 @@ class WasteRecordRequest extends BaseRequest
     protected function rulesForCreate(): array
     {
         return [
+            // `sometimes` selama masa transisi antrean offline — alasannya di
+            // MarkProductionItemsRequest. Item tetap harus milik outlet ini.
+            ...MarkProductionItemsRequest::OUTLET_RULES,
             'itemId' => ['nullable', 'uuid', 'exists:production_items,id'],
             'itemIds' => ['nullable', 'array'],
             'itemIds.*' => ['uuid', 'exists:production_items,id'],

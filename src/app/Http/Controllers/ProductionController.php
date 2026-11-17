@@ -11,6 +11,7 @@ namespace App\Http\Controllers;
     use App\Http\Requests\Production\ProductionProduceRequest;
     use App\Http\Requests\Production\ProductionPlanRequest;
     use App\Http\Requests\Production\ProductionExpiredBulkChangeRequest;
+    use App\Http\Requests\Production\MarkProductionItemsRequest;
     use App\Http\Requests\Production\WasteRecordRequest;
     use App\Http\Requests\Production\WasteIndexRequest;
 
@@ -131,7 +132,9 @@ namespace App\Http\Controllers;
             $result = $this->service->item->updateExpiredBulk(
                 $request->input('itemIds'),
                 $request->input('status'),
-                $request->input('notes')
+                $request->input('notes'),
+                $request->user(),
+                $request->input('outletId')
             );
 
             return $this->success(
@@ -145,9 +148,13 @@ namespace App\Http\Controllers;
         | Mark as Sold
         |--------------------------------------------------------------------------
         */
-        public function markSold(Request $request)
+        public function markSold(MarkProductionItemsRequest $request)
         {
-            $this->service->item->markSold($request->itemIds);
+            $this->service->item->markSold(
+                $request->input('itemIds'),
+                $request->user(),
+                $request->input('outletId')
+            );
 
             return $this->success(null, 'Items marked as sold');
         }
@@ -157,9 +164,13 @@ namespace App\Http\Controllers;
         | Mark as Waste
         |--------------------------------------------------------------------------
         */
-        public function markWaste(Request $request)
+        public function markWaste(MarkProductionItemsRequest $request)
         {
-            $this->service->item->markWaste($request->itemIds);
+            $this->service->item->markWaste(
+                $request->input('itemIds'),
+                $request->user(),
+                $request->input('outletId')
+            );
 
             return $this->success(null, 'Items marked as waste');
         }
@@ -197,9 +208,11 @@ namespace App\Http\Controllers;
         */
         public function wasteStore(WasteRecordRequest $request)
         {
-            $waste = $this->service->wasteRecord->recordFromItems(
+            $waste = $this->service->wasteRecord->recordForOutlet(
+                $request->user(),
                 $request->getItemIds(),
-                $request->reason
+                $request->reason,
+                $request->input('outletId')
             );  
             return $this->success(
                 WasteRecordResource::collection($waste)

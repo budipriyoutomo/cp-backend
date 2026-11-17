@@ -4,12 +4,15 @@ namespace App\Services\Production;
 
 use App\Models\WasteRecord; 
 use App\Models\ProductionItem;
+use App\Models\User;
+use App\Services\Concerns\AuthorizesProductionItems;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Services\BaseService;
 
 class WasteRecordService extends BaseService
 {
+    use AuthorizesProductionItems;
     protected string $model = WasteRecord::class;
 
     protected array $searchable = ['outlet_id', 'plate_color'];
@@ -37,6 +40,42 @@ class WasteRecordService extends BaseService
             ]);
         });
     }*/ 
+    /**
+     * `POST /production/waste`. Semua item harus milik outlet request dan user
+     * harus boleh outlet itu (AuthorizesProductionItems).
+     *
+     * Hanya piring yang belum difinalisasi yang dicatat. Layar dapur memanggil
+     * endpoint ini **sebelum** `mark-waste` (useConveyorGroups().wasteItems),
+     * jadi piring yang sah selalu masih `final_status = NULL`. Piring yang
+     * sudah sold/waste — ditutup tablet lain, atau request yang dikirim ulang
+     * setelah mark-waste — dulu tetap mendapat waste record kedua, padahal
+     * angka waste itulah yang direkonsiliasi dengan POS.
+     *
+     * Filter itu sengaja tidak ada di recordFromItems(): updateExpiredBulk()
+     * memanggilnya untuk piring yang baru saja ia klaim sebagai waste.
+     */
+    public function recordForOutlet(User $actor, array $itemIds, string $reason, ?string $outletId = null)
+    {
+        $outletId = $this->authorizeItemsForOutlet($actor, $itemIds, $outletId);
+
+        if ($outletId === null) {
+            return collect();
+        }
+
+        $open = ProductionItem::whereIn('id', $itemIds)
+            ->where('outlet_id', $outletId)
+            ->whereNull('final_status')
+            ->pluck('id')
+            ->all();
+
+        return $this->recordFromItems($open, $reason);
+    }
+
+    /**
+     * Tanpa pemeriksaan outlet maupun status — untuk pemanggil internal yang
+     * sudah mengklaim piringnya sendiri (ProductionItemService::updateExpiredBulk).
+     * Endpoint memakai recordForOutlet().
+     */
     public function recordFromItems(array $itemIds, string $reason)
     {
         // Snapshot reason + kategori dari teks yang dikirim layar dapur. Teks

@@ -5,15 +5,18 @@ namespace App\Services\Production;
 use App\Models\CloseDayLog;
 use App\Models\ProductionItem;
 use App\Models\Menu;
+use App\Models\User;
 use App\Models\WasteReason;
 use App\Models\WasteRecord;
 use App\Exceptions\BusinessRuleException;
 use App\Services\BaseService;
+use App\Services\Concerns\AuthorizesProductionItems;
 use App\Services\Concerns\ResolvesOutletBrand;
 use Illuminate\Support\Facades\DB;
 
 class ProductionItemService extends BaseService
 {
+    use AuthorizesProductionItems;
     use ResolvesOutletBrand;
 
     protected string $model = ProductionItem::class;
@@ -246,19 +249,32 @@ class ProductionItemService extends BaseService
      *
      * @return array{updated:int, skipped:int}
      */
-    public function updateExpiredBulk(array $ids, string $status, ?string $notes = null): array
-    {
+    public function updateExpiredBulk(
+        array $ids,
+        string $status,
+        ?string $notes,
+        User $actor,
+        ?string $outletId = null,
+    ): array {
         $ids = array_values(array_unique($ids));
 
         if (empty($ids)) {
             return ['updated' => 0, 'skipped' => 0];
         }
 
+        // Outlet diperiksa sebelum aturan hari, supaya pesan "plate dari hari
+        // sebelumnya" tidak membocorkan keadaan piring outlet lain.
+        $outletId = $this->authorizeItemsForOutlet($actor, $ids, $outletId);
+
+        if ($outletId === null) {
+            return ['updated' => 0, 'skipped' => count($ids)];
+        }
+
         // Gerbang yang sama dengan markSold()/markWaste(): hari lalu ditolak,
         // tidak pernah dilewati diam-diam.
         $this->assertWithinProductionDay($ids);
 
-        return DB::transaction(function () use ($ids, $status, $notes) {
+        return DB::transaction(function () use ($ids, $status, $notes, $outletId) {
             $stamp  = now();
             $column = $status === 'sold' ? 'sold_at' : 'wasted_at';
 
@@ -267,6 +283,7 @@ class ProductionItemService extends BaseService
             // tidak mengubah apa pun.
             ProductionItem::query()
                 ->whereIn('id', $ids)
+                ->where('outlet_id', $outletId)
                 ->where('expires_at', '<=', now())
                 ->whereNull('final_status')
                 ->whereDate('produced_at', today())
@@ -283,6 +300,7 @@ class ProductionItemService extends BaseService
             // hari itu, dan angka itulah yang direkonsiliasi dengan POS.
             $claimed = ProductionItem::query()
                 ->whereIn('id', $ids)
+                ->where('outlet_id', $outletId)
                 ->where('final_status', $status)
                 ->where($column, $stamp)
                 ->pluck('id')
@@ -307,12 +325,19 @@ class ProductionItemService extends BaseService
     | MARK SOLD
     |--------------------------------------------------------------------------
     */
-    public function markSold(array $ids)
+    public function markSold(array $ids, User $actor, ?string $outletId = null)
     {
+        $outletId = $this->authorizeItemsForOutlet($actor, $ids, $outletId);
+
+        if ($outletId === null) {
+            return 0;
+        }
+
         $this->assertWithinProductionDay($ids);
 
         return $this->query()
             ->whereIn('id', $ids)
+            ->where('outlet_id', $outletId)
             ->whereNull('final_status')
             ->whereDate('produced_at', today())
             ->update([
@@ -320,12 +345,19 @@ class ProductionItemService extends BaseService
                 'sold_at' => now(),
             ]);
     }
-    public function markWaste(array $ids)
+    public function markWaste(array $ids, User $actor, ?string $outletId = null)
     {
+        $outletId = $this->authorizeItemsForOutlet($actor, $ids, $outletId);
+
+        if ($outletId === null) {
+            return 0;
+        }
+
         $this->assertWithinProductionDay($ids);
 
         return $this->query()
             ->whereIn('id', $ids)
+            ->where('outlet_id', $outletId)
             ->whereNull('final_status')
             ->whereDate('produced_at', today())
             ->update([

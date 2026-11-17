@@ -20,6 +20,9 @@ class ProductionExpiredBulkChangeRequest extends BaseRequest
     protected function rulesForCreate(): array
     {
         return [
+            // `sometimes` selama masa transisi antrean offline — alasannya di
+            // MarkProductionItemsRequest. Item tetap harus milik outlet ini.
+            ...MarkProductionItemsRequest::OUTLET_RULES,
             // Batas atas menjaga satu request tidak menahan transaksi terlalu
             // lama; satu batch produksi di lapangan puluhan piring, bukan ratusan.
             'itemIds'   => ['required', 'array', 'min:1', 'max:500'],

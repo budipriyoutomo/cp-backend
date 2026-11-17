@@ -64,13 +64,20 @@ class ClosingReportController extends BaseApiController
     {
         $urls = collect($request->file('photos', []))
             ->map(function ($file) {
-                $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+                // Ekstensi dan Content-Type dari MIME hasil deteksi isi file oleh
+                // server, bukan `getClientOriginalExtension()` — itu dikendalikan
+                // klien, jadi PNG bernama `foto.html` dulu tersimpan sebagai .html
+                // dan disajikan bucket sebagai halaman.
+                $filename = Str::uuid() . '.' . $file->extension();
 
                 Storage::disk('s3')->putFileAs(
                     'closing-report/waste-photos',
                     $file,
                     $filename,
-                    'public'
+                    [
+                        'visibility'  => 'public',
+                        'ContentType' => $file->getMimeType(),
+                    ]
                 );
 
                 return Storage::disk('s3')->url('closing-report/waste-photos/' . $filename);

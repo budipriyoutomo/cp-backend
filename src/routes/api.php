@@ -249,7 +249,11 @@ Route::prefix('closing-reports')
     Route::get('/', [ClosingReportController::class, 'index']);
     Route::get('/data', [ClosingReportController::class, 'data']);
     Route::post('/submit', [ClosingReportController::class, 'submit']);
-    Route::post('/upload-photos', [ClosingReportController::class, 'uploadWastePhotos']);
+    // Satu-satunya rute yang menulis file ke bucket public. Closing report
+    // dibuat sekali sehari per outlet; 10 unggahan/menit (masing-masing ≤10
+    // foto × 5 MB) sudah longgar untuk coba ulang, tapi menahan pengisian bucket.
+    Route::post('/upload-photos', [ClosingReportController::class, 'uploadWastePhotos'])
+        ->middleware('throttle:10,1');
     Route::get('/{id}', [ClosingReportController::class, 'show'])->whereUuid('id');
 
     // Deleting a signed-off report is the one destructive action in this group.

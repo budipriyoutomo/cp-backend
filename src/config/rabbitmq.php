@@ -22,9 +22,10 @@ return [
         'max_attempts' => (int) env('RABBITMQ_CLOSING_REPORT_MAX_ATTEMPTS', 30),
 
         // Versi payload yang disusun saat submit (dan saat --rebuild). 2 =
-        // dengan rincian waste per kategori. Naikkan ke 2 HANYA setelah BI
-        // mengonfirmasi consumer v2 jalan di produksi: pesan yang mereka tolak
-        // tidak kembali ke outbox kita, tapi masuk DLQ mereka. Nilai lain = 1.
+        // dengan rincian waste per kategori; 3 = v2 + harga satuan & nilai
+        // rupiah. Naikkan HANYA setelah BI mengonfirmasi consumer versi itu
+        // jalan di produksi: pesan yang mereka tolak tidak kembali ke outbox
+        // kita, tapi masuk DLQ mereka. Nilai selain 2/3 = 1.
         'payload_version' => env('RABBITMQ_CLOSING_REPORT_PAYLOAD_VERSION', 1),
     ],
 ];

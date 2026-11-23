@@ -169,7 +169,7 @@ class ClosingReportPayloadV2Test extends TestCase
     /** Nilai yang tidak dikenal jatuh ke v1 — satu-satunya versi yang pasti diterima BI. */
     public function test_an_unknown_version_falls_back_to_v1(): void
     {
-        config(['rabbitmq.closing_report.payload_version' => '3']);
+        config(['rabbitmq.closing_report.payload_version' => '4']);
         $menu = $this->createMenu(null, ['menuname' => 'Salmon Nigiri']);
         $this->wasted($menu, $this->default);
         $this->submittedSales();
@@ -196,6 +196,7 @@ class ClosingReportPayloadV2Test extends TestCase
         $item = $payload['data']['items'][0];
 
         $this->assertSame(2, $payload['version']);
+        $this->assertArrayNotHasKey('unitPrice', $item); // harga baru di v3
         $this->assertSame(3, $item['waste']);
         $this->assertSame([
             ['categoryCode' => 'DEFAULT_WASTE', 'categoryName' => 'Default Waste', 'quantity' => 2],

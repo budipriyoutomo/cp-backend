@@ -3,12 +3,9 @@
 namespace App\Services\ClosingReport;
 
 use App\Models\ClosingReport;
-use App\Models\Menu;
 use App\Models\ProductionItem;
-use App\Models\SalesItemDetail;
 use App\Models\WasteCategory;
 use App\Models\WasteRecord;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -18,9 +15,12 @@ use Illuminate\Support\Facades\Log;
  *
  * - v1: angka per menu.
  * - v2: v1 + `items[].wasteByCategory` (docs/jawaban-bi-closing-report-v2.md).
+ * - v3: v2 + harga satuan piring dan nilai rupiah per sold/waste/adjustment/
+ *   compensation (`unitPrice`, `soldAmount`, `wasteAmount`, `adjustmentAmount`,
+ *   `compensationAmount`).
  *
  * Versi yang disusun dipilih lewat config `rabbitmq.closing_report.payload_version`,
- * bukan otomatis: consumer BI harus sudah menerima v2 sebelum kita mengirimnya.
+ * bukan otomatis: consumer BI harus sudah menerima versi itu sebelum kita mengirimnya.
  *
  * `sentAt` sengaja tidak diisi di sini: payload disimpan di outbox saat submit,
  * sedangkan waktu kirim baru diketahui saat publish (bisa jauh setelahnya kalau
@@ -31,6 +31,11 @@ class ClosingReportPayloadBuilder
     public const EVENT = 'closingreport.submitted';
     public const VERSION_1 = 1;
     public const VERSION_2 = 2;
+    public const VERSION_3 = 3;
+
+    public function __construct(private readonly ClosingReportMenuLines $menuLines)
+    {
+    }
 
     public function build(ClosingReport $report): array
     {
@@ -40,10 +45,16 @@ class ClosingReportPayloadBuilder
         $brand = $outlet->brandMaster;
         $version = $this->version();
 
-        $items = $this->items($report);
+        $lines = $this->menuLines->for($report->sales_id, $report->outlet_id, $report->date->toDateString());
 
-        if ($version === self::VERSION_2) {
+        $items = $this->items($lines);
+
+        if ($version >= self::VERSION_2) {
             $items = $this->withWasteByCategory($report, $items);
+        }
+
+        if ($version >= self::VERSION_3) {
+            $items = $this->withPrices($items, $lines);
         }
 
         return [
@@ -61,88 +72,67 @@ class ClosingReportPayloadBuilder
     }
 
     /**
-     * Nilai dari .env selalu string. Selain 2, semuanya v1 — satu-satunya
+     * Nilai dari .env selalu string. Selain 2 dan 3, semuanya v1 — satu-satunya
      * versi yang pasti diterima consumer BI.
      */
     private function version(): int
     {
-        return (int) config('rabbitmq.closing_report.payload_version', self::VERSION_1) === self::VERSION_2
-            ? self::VERSION_2
+        $configured = (int) config('rabbitmq.closing_report.payload_version', self::VERSION_1);
+
+        return in_array($configured, [self::VERSION_2, self::VERSION_3], true)
+            ? $configured
             : self::VERSION_1;
     }
 
     /**
-     * Satu baris per menu: gabungan menu yang diproduksi hari itu dan menu yang
-     * punya rincian di Sales Input — sama dengan baris di layar Closing Report
-     * (SalesClosingReportResource).
+     * v3: harga satuan piring + nilai rupiah tiap angka item.
+     *
+     * Harga satuan dari ClosingReportMenuLines — angka yang sama dengan
+     * `sellingPrice` di layar Closing Report. Master tidak menyimpan riwayat
+     * harga, jadi yang dipakai harga saat pesan disusun: saat submit (payload
+     * dibekukan di outbox), atau saat `--rebuild`.
+     */
+    private function withPrices(array $items, Collection $lines): array
+    {
+        $priceOfMenu = $lines->pluck('unitPrice', 'menuId');
+
+        return array_map(function (array $item) use ($priceOfMenu) {
+            $unitPrice = (float) $priceOfMenu->get($item['menuId'], 0.0);
+            $amount = fn (int $quantity) => round($quantity * $unitPrice, 2);
+
+            return $item + [
+                'unitPrice'          => $unitPrice,
+                'soldAmount'         => $amount($item['sold']),
+                'wasteAmount'        => $amount($item['waste']),
+                'adjustmentAmount'   => $amount($item['adjustment']),
+                'compensationAmount' => $amount($item['compensation']),
+            ];
+        }, $items);
+    }
+
+    /**
+     * Bentuk v1 satu baris per menu. Barisnya dari ClosingReportMenuLines —
+     * sama persis dengan baris di layar Closing Report.
      *
      * Rincian per menu (`sales_item_details`) hanya ada kalau operator membuka
      * dialog rincian di Sales Input. Dulu payload dibangun dari tabel itu saja,
      * jadi sales yang disubmit tanpa membuka dialog terkirim dengan `items: []`
-     * dan ditolak BI. Sekarang:
-     * - `sold`/`waste` dari rincian kalau ada (dibekukan saat Sales Input),
-     *   kalau tidak dari production_items. Rincian itu sendiri dihitung dari
-     *   query production_items yang sama, jadi keduanya sepakat.
-     * - `adjustment`/`compensation` hanya ada di rincian; tanpa rincian = 0.
+     * dan ditolak BI — karena itu barisnya juga dari production_items.
      */
-    private function items(ClosingReport $report): array
+    private function items(Collection $lines): array
     {
-        $details = SalesItemDetail::query()
-            ->whereHas('item', fn ($q) => $q->where('sales_id', $report->sales_id))
-            ->get()
-            ->groupBy('menu_id');
-
-        $production = $this->productionByMenu($report);
-
-        $menuIds = $production->keys()->merge($details->keys())->filter()->unique()->values();
-
-        $menus = Menu::withTrashed()->whereIn('id', $menuIds)->get()->keyBy('id');
-
-        return $menuIds
-            ->map(function (string $menuId) use ($details, $production, $menus) {
-                $rows = $details->get($menuId);
-                $made = $production->get($menuId);
-                $menu = $menus->get($menuId);
-
-                return [
-                    'menuId'         => $menuId,
-                    'menuCode'       => $menu?->code,
-                    'menuName'       => $rows?->first()->menu_name ?? $menu?->menuname,
-                    'productionDate' => $made ? Carbon::parse($made->first_produced_at)->toDateString() : null,
-                    'sold'           => (int) ($rows ? $rows->sum('total_sold') : ($made->sold ?? 0)),
-                    'waste'          => (int) ($rows ? $rows->sum('total_wasted') : ($made->waste ?? 0)),
-                    'adjustment'     => (int) ($rows?->sum('adjustment') ?? 0),
-                    'compensation'   => (int) ($rows?->sum('compensation') ?? 0),
-                ];
-            })
-            ->sortBy('menuName', SORT_NATURAL | SORT_FLAG_CASE)
-            ->values()
+        return $lines
+            ->map(fn (array $line) => [
+                'menuId'         => $line['menuId'],
+                'menuCode'       => $line['menuCode'],
+                'menuName'       => $line['menuName'],
+                'productionDate' => $line['productionDate'],
+                'sold'           => $line['sold'],
+                'waste'          => $line['waste'],
+                'adjustment'     => $line['adjustment'],
+                'compensation'   => $line['compensation'],
+            ])
             ->all();
-    }
-
-    /**
-     * Angka produksi per menu di outlet + hari laporan.
-     *
-     * Filternya sama dengan ProductionItemService::getProductionMenuDetail
-     * (`whereDate(produced_at)` di zona waktu aplikasi), sumber angka rincian
-     * Sales Input. `productionDate` dibaca dari sini — bukan disalin dari
-     * tanggal closing.
-     */
-    private function productionByMenu(ClosingReport $report): Collection
-    {
-        return ProductionItem::query()
-            ->where('outlet_id', $report->outlet_id)
-            ->whereNotNull('menu_id')
-            ->whereDate('produced_at', $report->date->toDateString())
-            ->groupBy('menu_id')
-            ->selectRaw('
-                menu_id,
-                MIN(produced_at) as first_produced_at,
-                SUM(CASE WHEN sold_at IS NOT NULL THEN quantity ELSE 0 END) as sold,
-                SUM(CASE WHEN wasted_at IS NOT NULL THEN quantity ELSE 0 END) as waste
-            ')
-            ->get()
-            ->keyBy('menu_id');
     }
 
     /**

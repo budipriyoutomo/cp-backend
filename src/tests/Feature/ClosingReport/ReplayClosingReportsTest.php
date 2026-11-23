@@ -286,4 +286,58 @@ class ReplayClosingReportsTest extends TestCase
         $this->assertSame("{$report->id}.v3", $this->publisher->last()['messageId']);
         $this->assertSame("{$report->id}.v3", $this->publisher->last()['payload']['messageId']);
     }
+
+    /**
+     * Kiriman ulang `.v3` sudah tersimpan di BI, lalu payload v3 bertambah
+     * (`plateColor`). BI membuang `messageId` yang sama, jadi revisi baru
+     * butuh akhiran baru — tetap tanpa waktu.
+     */
+    public function test_revision_option_resends_an_already_replayed_report_with_a_new_message_id(): void
+    {
+        $report = $this->report('2026-10-01');
+        $this->artisan('closing-report:replay', ['--from' => '2026-10-01'])->assertSuccessful();
+
+        $this->artisan('closing-report:replay', ['--from' => '2026-10-01', '--revision' => '2'])
+            ->expectsOutputToContain('revisi 2')
+            ->expectsOutputToContain("{$report->id}.v3.r2  items 1  terkirim")
+            ->assertSuccessful();
+
+        $sent = $this->publisher->last();
+        $this->assertSame("{$report->id}.v3.r2", $sent['messageId']);
+        $this->assertSame("{$report->id}.v3.r2", $sent['payload']['messageId']);
+        $this->assertSame($report->id, $sent['payload']['data']['closingReportId']);
+        $this->assertArrayHasKey('plateColor', $sent['payload']['data']['items'][0]);
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9._-]+$/', $sent['messageId']); // id korelasi BI
+
+        // Menjalankan revisi yang sama lagi tidak membuat revisi ketiga.
+        $this->artisan('closing-report:replay', ['--from' => '2026-10-01', '--revision' => '2'])
+            ->expectsOutputToContain('1 sudah terkirim sebelumnya')
+            ->assertSuccessful();
+
+        $this->assertSame(["{$report->id}.v3", "{$report->id}.v3.r2"], $this->publishedMessageIds());
+        $this->assertSame(3, $report->outboxMessages()->count());
+        $this->assertSame((string) $report->id, $report->fresh()->outbox->message_id);
+    }
+
+    public function test_revision_one_is_the_plain_replay_message_id(): void
+    {
+        $report = $this->report('2026-10-01');
+
+        $this->artisan('closing-report:replay', ['--from' => '2026-10-01', '--revision' => '1'])->assertSuccessful();
+
+        $this->assertSame(["{$report->id}.v3"], $this->publishedMessageIds());
+    }
+
+    public function test_revision_must_be_a_positive_integer(): void
+    {
+        $this->report('2026-10-01');
+
+        foreach (['0', '-1', 'abc', '2.5'] as $revision) {
+            $this->artisan('closing-report:replay', ['--from' => '2026-10-01', '--revision' => $revision])
+                ->expectsOutputToContain('--revision harus bilangan bulat')
+                ->assertFailed();
+        }
+
+        $this->publisher->assertNothingPublished();
+    }
 }

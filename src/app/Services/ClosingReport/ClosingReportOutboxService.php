@@ -178,10 +178,18 @@ class ClosingReportOutboxService
      * aktif: `<closingReportId>.v<versi>` — format yang disepakati BI
      * (docs/jawaban-bi-closing-report-v3.md). Tetap, tanpa waktu: menjalankan
      * replay dua kali tidak boleh menjadi dua revisi di BI.
+     *
+     * Revisi 2 ke atas (`<id>.v3.r2`) untuk mengirim ulang laporan yang
+     * kiriman ulangnya sudah tersimpan di BI — mis. setelah payload v3
+     * bertambah `plateColor`. BI membuang `messageId` yang sudah tersimpan,
+     * jadi tanpa akhiran baru isi barunya tidak pernah sampai. Nomornya
+     * dipilih operator, bukan waktu, supaya tetap bisa dijalankan ulang.
      */
-    public function replayMessageId(ClosingReport $report): string
+    public function replayMessageId(ClosingReport $report, int $revision = 1): string
     {
-        return $report->id.'.v'.$this->payloads->version();
+        $messageId = $report->id.'.v'.$this->payloads->version();
+
+        return $revision > 1 ? $messageId.'.r'.$revision : $messageId;
     }
 
     /**
@@ -197,9 +205,9 @@ class ClosingReportOutboxService
      *
      * @throws BusinessRuleException 422 kalau laporan tidak punya satu menu pun
      */
-    public function enqueueReplay(ClosingReport $report): ClosingReportOutbox
+    public function enqueueReplay(ClosingReport $report, int $revision = 1): ClosingReportOutbox
     {
-        $messageId = $this->replayMessageId($report);
+        $messageId = $this->replayMessageId($report, $revision);
 
         $existing = ClosingReportOutbox::where('message_id', $messageId)->first();
 

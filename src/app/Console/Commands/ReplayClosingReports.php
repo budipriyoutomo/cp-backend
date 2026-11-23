@@ -36,6 +36,7 @@ class ReplayClosingReports extends Command
                             {--to= : Tanggal laporan paling akhir (Y-m-d), default hari ini}
                             {--outlet= : Hanya outlet dengan kode ini}
                             {--report= : Satu closing report saja (UUID) — untuk pesan contoh ke BI}
+                            {--revision=1 : Nomor revisi kiriman ulang. 1 = <id>.v3; 2 ke atas = <id>.v3.r<n>, untuk laporan yang kiriman ulangnya sudah tersimpan di BI}
                             {--dry-run : Tampilkan apa yang akan dikirim, tanpa mengirim atau menulis apa pun}';
 
     /**
@@ -54,6 +55,12 @@ class ReplayClosingReports extends Command
             return self::FAILURE;
         }
 
+        $revision = $this->revision();
+
+        if ($revision === null) {
+            return self::FAILURE;
+        }
+
         $reports = $this->reports();
 
         if ($reports === null) {
@@ -68,9 +75,10 @@ class ReplayClosingReports extends Command
 
         $dryRun = (bool) $this->option('dry-run');
         $this->info(sprintf(
-            '%d closing report, payload v%d%s.',
+            '%d closing report, payload v%d%s%s.',
             $reports->count(),
             $version,
+            $revision > 1 ? ", revisi {$revision}" : '',
             $dryRun ? ' (dry run, tidak ada yang dikirim)' : '',
         ));
 
@@ -78,8 +86,8 @@ class ReplayClosingReports extends Command
 
         foreach ($reports as $index => $report) {
             $outcome = $dryRun
-                ? $this->preview($service, $payloads, $report)
-                : $this->replay($service, $report);
+                ? $this->preview($service, $payloads, $report, $revision)
+                : $this->replay($service, $report, $revision);
 
             $counts[$outcome]++;
 
@@ -165,6 +173,22 @@ class ReplayClosingReports extends Command
         return $query->get();
     }
 
+    /**
+     * @return int|null null kalau bukan bilangan bulat >= 1
+     */
+    private function revision(): ?int
+    {
+        $value = (string) $this->option('revision');
+
+        if (! ctype_digit($value) || (int) $value < 1) {
+            $this->error("--revision harus bilangan bulat 1 atau lebih, diterima: {$value}");
+
+            return null;
+        }
+
+        return (int) $value;
+    }
+
     private function dateOption(string $name): ?string
     {
         $value = (string) $this->option($name);
@@ -186,9 +210,9 @@ class ReplayClosingReports extends Command
         return $value;
     }
 
-    private function preview(ClosingReportOutboxService $service, ClosingReportPayloadBuilder $payloads, ClosingReport $report): string
+    private function preview(ClosingReportOutboxService $service, ClosingReportPayloadBuilder $payloads, ClosingReport $report, int $revision): string
     {
-        $messageId = $service->replayMessageId($report);
+        $messageId = $service->replayMessageId($report, $revision);
         $existing = ClosingReportOutbox::where('message_id', $messageId)->first();
 
         if ($existing?->status === ClosingReportOutbox::STATUS_PUBLISHED) {
@@ -212,12 +236,12 @@ class ReplayClosingReports extends Command
         return 'sent';
     }
 
-    private function replay(ClosingReportOutboxService $service, ClosingReport $report): string
+    private function replay(ClosingReportOutboxService $service, ClosingReport $report, int $revision): string
     {
         try {
-            $row = $service->enqueueReplay($report);
+            $row = $service->enqueueReplay($report, $revision);
         } catch (BusinessRuleException) {
-            $this->line($this->row($report, $service->replayMessageId($report), 0, 'dilewati: tanpa menu'));
+            $this->line($this->row($report, $service->replayMessageId($report, $revision), 0, 'dilewati: tanpa menu'));
 
             return 'empty';
         }

@@ -230,6 +230,40 @@ class ClosingReportPayloadV3Test extends TestCase
         $this->assertSame(5, $sent[$salmon->id]['sold']);
     }
 
+    /**
+     * BI mengisi warna menu dari `plateColor` (jawaban BI v3 bagian 6), jadi
+     * warnanya harus warna yang sama dengan dasar `unitPrice`: warna piring
+     * yang benar-benar diproduksi, bukan warna menu saat ini.
+     */
+    public function test_v3_sends_the_plate_color_name_behind_the_unit_price(): void
+    {
+        $merah = $this->createPlateColor(['platename' => 'Merah', 'price' => 15000]);
+        $biru = $this->createPlateColor(['platename' => 'Biru', 'price' => 9000]);
+        $salmon = $this->createMenu($merah, ['menuname' => 'Salmon Nigiri']);
+
+        $this->plate($salmon, 'sold');
+        // Warna menu dipindah setelah piringnya dibuat.
+        $salmon->update(['plate_color_id' => $biru->id]);
+        $this->submittedSales();
+
+        $item = $this->submit()['data']['items'][0];
+
+        $this->assertSame('Merah', $item['plateColor']);
+        $this->assertEquals(15000, $item['unitPrice']);
+    }
+
+    public function test_v3_plate_color_falls_back_to_the_menu_color_without_production(): void
+    {
+        $merah = $this->createPlateColor(['platename' => 'Merah', 'price' => 15000]);
+        $salmon = $this->createMenu($merah, ['menuname' => 'Salmon Nigiri']);
+        $header = $this->submittedSales();
+        $this->detail($header, $salmon, sold: 3, waste: 0, adjustment: 0, compensation: 0);
+
+        $item = $this->submit()['data']['items'][0];
+
+        $this->assertSame('Merah', $item['plateColor']);
+    }
+
     public function test_v1_and_v2_carry_no_prices(): void
     {
         $salmon = $this->createMenu(null, ['menuname' => 'Salmon Nigiri']);
@@ -241,5 +275,6 @@ class ClosingReportPayloadV3Test extends TestCase
 
         $this->assertArrayNotHasKey('unitPrice', $item);
         $this->assertArrayNotHasKey('soldAmount', $item);
+        $this->assertArrayNotHasKey('plateColor', $item);
     }
 }

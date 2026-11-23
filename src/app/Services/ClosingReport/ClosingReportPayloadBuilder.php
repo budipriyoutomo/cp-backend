@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
  * - v2: v1 + `items[].wasteByCategory` (docs/jawaban-bi-closing-report-v2.md).
  * - v3: v2 + harga satuan piring dan nilai rupiah per sold/waste/adjustment/
  *   compensation (`unitPrice`, `soldAmount`, `wasteAmount`, `adjustmentAmount`,
- *   `compensationAmount`).
+ *   `compensationAmount`), plus nama warna piringnya (`plateColor`).
  *
  * Versi yang disusun dipilih lewat config `rabbitmq.closing_report.payload_version`,
  * bukan otomatis: consumer BI harus sudah menerima versi itu sebelum kita mengirimnya.
@@ -94,10 +94,11 @@ class ClosingReportPayloadBuilder
      */
     private function withPrices(array $items, Collection $lines): array
     {
-        $priceOfMenu = $lines->pluck('unitPrice', 'menuId');
+        $lineOfMenu = $lines->keyBy('menuId');
 
-        return array_map(function (array $item) use ($priceOfMenu) {
-            $unitPrice = (float) $priceOfMenu->get($item['menuId'], 0.0);
+        return array_map(function (array $item) use ($lineOfMenu) {
+            $line = $lineOfMenu->get($item['menuId']);
+            $unitPrice = (float) ($line['unitPrice'] ?? 0.0);
             $amount = fn (int $quantity) => round($quantity * $unitPrice, 2);
 
             return $item + [
@@ -106,8 +107,25 @@ class ClosingReportPayloadBuilder
                 'wasteAmount'        => $amount($item['waste']),
                 'adjustmentAmount'   => $amount($item['adjustment']),
                 'compensationAmount' => $amount($item['compensation']),
+                'plateColor'         => $this->plateColorName($line),
             ];
         }, $items);
+    }
+
+    /**
+     * v3: nama warna piring yang menjadi dasar `unitPrice` — diminta BI untuk
+     * mengisi warna menu di sisi mereka (docs/jawaban-bi-closing-report-v3.md
+     * bagian 6). Isinya `platename`, nama yang sama dengan produk piring di POS
+     * (POSService mencocokkannya dengan LOWER(TRIM())). Warna yang sama dengan
+     * harga, jadi keduanya tidak pernah menunjuk baris yang berbeda.
+     *
+     * Tanpa warna → `null`; BI menerima dan tidak mengubah warna menunya.
+     */
+    private function plateColorName(?array $line): ?string
+    {
+        $name = trim((string) ($line['plateColor']?->platename ?? ''));
+
+        return $name === '' ? null : $name;
     }
 
     /**

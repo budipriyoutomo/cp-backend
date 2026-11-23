@@ -56,8 +56,9 @@ class ClosingReportOutboxService
         }
 
         return ClosingReportOutbox::firstOrCreate(
-            ['closing_report_id' => $report->id],
+            ['message_id' => (string) $report->id],
             [
+                'closing_report_id' => $report->id,
                 'payload'         => $payload,
                 'next_attempt_at' => now()->addMinutes(self::IMMEDIATE_PUBLISH_GRACE_MINUTES),
             ],
@@ -80,7 +81,7 @@ class ClosingReportOutboxService
                 config('rabbitmq.closing_report.exchange'),
                 config('rabbitmq.closing_report.routing_key'),
                 $outbox->payload + ['sentAt' => now()->toIso8601String()],
-                $outbox->closing_report_id,
+                $outbox->messageId(),
             );
         } catch (Throwable $e) {
             $attempt = $outbox->attempts + 1;
@@ -158,6 +159,9 @@ class ClosingReportOutboxService
             throw new BusinessRuleException('Laporan ini tidak punya menu untuk dikirim ke BI.', 422);
         }
 
+        // Baris kiriman ulang tetap membawa `<id>.vN`-nya sendiri.
+        $payload['messageId'] = $outbox->messageId();
+
         $outbox->update([
             'payload'         => $payload,
             'status'          => ClosingReportOutbox::STATUS_PENDING,
@@ -167,6 +171,58 @@ class ClosingReportOutboxService
         ]);
 
         return $outbox;
+    }
+
+    /**
+     * `messageId` kiriman ulang laporan ini dalam versi payload yang sedang
+     * aktif: `<closingReportId>.v<versi>` — format yang disepakati BI
+     * (docs/jawaban-bi-closing-report-v3.md). Tetap, tanpa waktu: menjalankan
+     * replay dua kali tidak boleh menjadi dua revisi di BI.
+     */
+    public function replayMessageId(ClosingReport $report): string
+    {
+        return $report->id.'.v'.$this->payloads->version();
+    }
+
+    /**
+     * Antre kiriman ulang satu laporan dengan payload yang disusun dari data
+     * saat ini (harga master saat ini) dan `messageId` baru.
+     *
+     * Baris pesan submit tidak disentuh — riwayatnya tetap. Kalau kiriman
+     * ulang untuk versi ini sudah pernah diantre, baris itu yang dikembalikan
+     * (`wasRecentlyCreated` = false), tidak dibuat yang kedua.
+     *
+     * Hanya mengantre. Pemanggil yang mengirim lewat publish(); kalau gagal,
+     * scheduler melanjutkan seperti pesan lain.
+     *
+     * @throws BusinessRuleException 422 kalau laporan tidak punya satu menu pun
+     */
+    public function enqueueReplay(ClosingReport $report): ClosingReportOutbox
+    {
+        $messageId = $this->replayMessageId($report);
+
+        $existing = ClosingReportOutbox::where('message_id', $messageId)->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $payload = $this->payloads->build($report);
+
+        if ($payload['data']['items'] === []) {
+            throw new BusinessRuleException('Laporan ini tidak punya menu untuk dikirim ke BI.', 422);
+        }
+
+        $payload['messageId'] = $messageId;
+
+        return ClosingReportOutbox::create([
+            'closing_report_id' => $report->id,
+            'message_id'        => $messageId,
+            'payload'           => $payload,
+            // Sama dengan enqueue(): pemanggil mengirim langsung, scheduler
+            // baru boleh menyentuh baris ini setelah masa tenggang.
+            'next_attempt_at'   => now()->addMinutes(self::IMMEDIATE_PUBLISH_GRACE_MINUTES),
+        ]);
     }
 
     /**

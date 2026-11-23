@@ -15,6 +15,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * operasional, bukan data domain. Percobaan ulang dijalankan scheduler tanpa
  * user, dan baris yang dihapus lunak tidak ada artinya bagi antrean kirim.
  *
+ * Satu laporan bisa punya lebih dari satu baris: pesan submit (`message_id`
+ * = id laporan) dan kiriman ulang dalam versi payload baru (`<id>.v3`, lihat
+ * `closing-report:replay`). Yang unik adalah `message_id`.
+ *
  * Kebijakan retry (batas percobaan, jeda) bukan urusan model ini; pemanggil
  * yang menentukan `maxAttempts` dan kapan percobaan berikutnya.
  */
@@ -30,6 +34,7 @@ class ClosingReportOutbox extends Model
 
     protected $fillable = [
         'closing_report_id',
+        'message_id',
         'payload',
         'status',
         'attempts',
@@ -49,6 +54,28 @@ class ClosingReportOutbox extends Model
         'next_attempt_at' => 'datetime',
         'published_at'    => 'datetime',
     ];
+
+    /**
+     * Baris tanpa `message_id` adalah pesan submit. Diisi di sini, bukan
+     * diserahkan ke pemanggil: kolomnya nullable (lihat migration), dan baris
+     * yang lolos tanpa id tidak dijaga unique dan tidak terbaca
+     * `ClosingReport::outbox()`.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $outbox) {
+            $outbox->message_id ??= (string) $outbox->closing_report_id;
+        });
+    }
+
+    /**
+     * Id yang dikirim ke broker dan dipakai BI untuk dedup. Baris dari sebelum
+     * kolom `message_id` ada sudah di-backfill; fallback ini hanya pagar.
+     */
+    public function messageId(): string
+    {
+        return (string) ($this->message_id ?? $this->closing_report_id);
+    }
 
     public function closingReport(): BelongsTo
     {

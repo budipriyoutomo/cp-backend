@@ -20,6 +20,9 @@ class ClosingReportOutboxResource extends BaseResource
         return [
             'id'              => $this->id,
             'closingReportId' => $this->closing_report_id,
+            'messageId'       => $this->messageId(),
+            // Kiriman ulang `closing-report:replay` (`<id>.v3`), bukan pesan submit.
+            'isReplay'        => $this->messageId() !== (string) $this->closing_report_id,
             'date'            => $report?->date?->format('Y-m-d'),
             'outletId'        => $report?->outlet_id,
             'outletCode'      => $report?->outlet?->code,

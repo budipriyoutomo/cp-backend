@@ -72,10 +72,10 @@ class ClosingReportPayloadBuilder
     }
 
     /**
-     * Nilai dari .env selalu string. Selain 2 dan 3, semuanya v1 — satu-satunya
-     * versi yang pasti diterima consumer BI.
+     * Versi yang akan disusun build(). Nilai dari .env selalu string. Selain
+     * 2 dan 3, semuanya v1 — satu-satunya versi yang pasti diterima consumer BI.
      */
-    private function version(): int
+    public function version(): int
     {
         $configured = (int) config('rabbitmq.closing_report.payload_version', self::VERSION_1);
 

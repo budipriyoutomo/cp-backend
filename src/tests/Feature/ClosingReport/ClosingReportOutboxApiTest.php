@@ -128,6 +128,25 @@ class ClosingReportOutboxApiTest extends TestCase
             ->assertJsonPath('data.0.publishedAt', null);
     }
 
+    public function test_list_tells_a_replay_apart_from_the_submit_message(): void
+    {
+        $submit = $this->outbox();
+        $submit->update(['message_id' => $submit->closing_report_id]);
+        ClosingReportOutbox::forceCreate([
+            'closing_report_id' => $submit->closing_report_id,
+            'message_id'        => "{$submit->closing_report_id}.v3",
+            'payload'           => ['event' => 'closingreport.submitted'],
+            'status'            => ClosingReportOutbox::STATUS_FAILED,
+            'attempts'          => 1,
+            'created_at'        => now()->addSecond(),
+        ]);
+
+        $rows = collect($this->list()->assertOk()->json('data'))->keyBy('messageId');
+
+        $this->assertFalse($rows[$submit->closing_report_id]['isReplay']);
+        $this->assertTrue($rows["{$submit->closing_report_id}.v3"]['isReplay']);
+    }
+
     public function test_list_flags_rows_that_stopped_retrying(): void
     {
         $this->outbox(null, '2026-10-01', ['attempts' => 5]);

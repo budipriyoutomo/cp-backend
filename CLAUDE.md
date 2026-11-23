@@ -90,6 +90,7 @@ Pemakai pertamanya closing report ke BI, lewat pola **outbox**:
 2. `publish()` **setelah** commit. Tidak pernah melempar; gagal → `markFailed()` + jadwal ulang (1, 2, 4, … maks 60 menit).
 3. `closing-report:publish-pending` (scheduler tiap menit) mengirim baris yang jatuh tempo sampai `rabbitmq.closing_report.max_attempts`.
 4. Lewat batas itu, admin mengirim manual dari layar `/admin/bi-sync` (`ClosingReportOutboxController`) atau `publish-pending --id`. Keduanya lewat `ClosingReportOutboxService::resend()` — satu aturan: abaikan jadwal dan batas, tolak (409) yang sudah terkirim.
+5. Kiriman ulang data lampau dalam versi payload baru: `closing-report:replay` → `enqueueReplay()`. Baris outbox **baru** dengan `message_id` = `<id>.v<versi>`, karena BI membuang `messageId` yang sudah tersimpan. Satu laporan bisa punya beberapa baris outbox — unique-nya di `message_id`, dan `ClosingReport::outbox()` selalu menunjuk pesan submit (`message_id` = id laporan).
 
 Mau mengirim event lain? Ikuti pola yang sama: tabel outbox sendiri, enqueue dalam transaksi, publish setelah commit. Memanggil publisher langsung di dalam transaksi berarti pesan bisa terkirim untuk data yang kemudian di-rollback.
 

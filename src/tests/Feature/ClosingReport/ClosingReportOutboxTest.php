@@ -70,7 +70,8 @@ class ClosingReportOutboxTest extends TestCase
 
     public function test_a_closing_report_has_at_most_one_outbox_row(): void
     {
-        // A re-submit or a replayed request must never queue a second message.
+        // A re-submit or a replayed request must never queue a second submit
+        // message. Replays (`<id>.v3`) are separate rows — see ReplayClosingReportsTest.
         $report = $this->createReport();
         $this->createOutbox($report);
 
